@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* PP Mondwest — display font (Figma: sign-in heading) */
+@font-face {
+  font-family: "PP Mondwest";
+  src: url("/fonts/ppmondwest-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Aeonik Pro — body font (Figma: sign-in body text) */
+@font-face {
+  font-family: "Aeonik Pro";
+  src: url("/fonts/AeonikProTRIAL-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Pro";
+  src: url("/fonts/AeonikProTRIAL-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Pro";
+  src: url("/fonts/AeonikProTRIAL-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Editor palette — dark theme */
+  --color-editor-bg: #0d0d0d;
+  --color-editor-surface: #1a1a1a;
+  --color-editor-surface-hover: #242424;
+  --color-editor-border: #2a2a2a;
+  --color-editor-border-subtle: #1f1f1f;
+  --color-editor-text: #e4e4e7;
+  --color-editor-text-muted: #71717a;
+  --color-editor-text-dim: #52525b;
+  --color-editor-accent: #6366f1;
+  --color-editor-accent-hover: #818cf8;
+  --color-editor-danger: #ef4444;
+  --color-editor-viewport-bg: #111118;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+html.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
