@@ -35,6 +35,13 @@ export function useKeyboardShortcuts() {
 
       const ctrl = e.ctrlKey || e.metaKey;
 
+      // Save (Ctrl+S) — dispatch custom event, handled by auto-save hook
+      if (ctrl && e.key === "s") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("editor:save"));
+        return;
+      }
+
       // Undo
       if (ctrl && !e.shiftKey && e.key === "z") {
         e.preventDefault();

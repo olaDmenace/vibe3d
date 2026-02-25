@@ -1118,37 +1118,40 @@ New design added to Figma → Developer references it via Figma MCP
 
 ## Implementation Phases
 
-### Phase 1: Deterministic Editor Core (Weeks 1–3)
+### Phase 1: Deterministic Editor Core (Weeks 1–3) ✅ COMPLETE
 **Goal:** A working 3D editor with NO AI — just manual tools.
 
-- [ ] Project scaffolding: Next.js + TypeScript + Tailwind + shadcn/ui
-- [ ] Define all types: `SceneState`, `SceneObject`, `EditorAction`, `Transform`, etc.
-- [ ] Implement Zustand editor store with Immer
-- [ ] Implement action dispatch + reducer
-- [ ] Implement undo/redo (past/future stacks)
-- [ ] Build viewport: Canvas + OrbitControls + grid + lighting
-- [ ] Object rendering from store (start with primitives: cube, sphere, plane)
-- [ ] Object selection via raycasting
-- [ ] TransformControls (translate, rotate, scale) for selected object
-- [ ] Scene hierarchy panel (list of objects, click to select)
-- [ ] Properties panel (shows/edits transform + material of selected object)
-- [ ] Toolbar (select/translate/rotate/scale mode, add primitive, delete)
-- [ ] Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z (redo), Delete, Ctrl+D (duplicate)
+- [x] Project scaffolding: Next.js + TypeScript + Tailwind (shadcn/ui deferred — using plain Tailwind)
+- [x] Define all types: `SceneState`, `SceneObject`, `EditorAction`, `Transform`, etc.
+- [x] Implement Zustand editor store with Immer
+- [x] Implement action dispatch + reducer
+- [x] Implement undo/redo (past/future stacks)
+- [x] Build viewport: Canvas + OrbitControls + grid + lighting
+- [x] Object rendering from store (primitives: cube, sphere, plane, cylinder, cone, torus)
+- [x] Object selection via raycasting
+- [x] TransformControls (translate, rotate, scale) for selected object
+- [x] Scene hierarchy panel (list of objects, click to select, visibility/lock toggles)
+- [x] Properties panel (shows/edits transform + material of selected object)
+- [x] Toolbar (select/translate/rotate/scale mode, add primitive, undo/redo, duplicate, delete)
+- [x] Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z (redo), Delete, Ctrl+D (duplicate), V/G/R/S tool keys
+- [x] Landing page (`/`) from Figma design — nav, hero, video preview, features grid, footer
+- [x] Sign-in page (`/sign-in`) from Figma design — Google OAuth, email form, hero image, trust logos, custom fonts (PP Mondwest + Aeonik Pro), gem logo SVG
+- [x] Route structure: `/` (landing), `/sign-in` (auth), `/editor` (3D editor)
 
-**Success criteria:** User can add primitives, select, transform, undo, and the store is the single source of truth.
+**Success criteria:** User can add primitives, select, transform, undo, and the store is the single source of truth. ✅ MET
 
-### Phase 2: Persistence & Auth (Weeks 4–5)
+### Phase 2: Persistence & Auth (Weeks 4–5) ✅ COMPLETE
 **Goal:** Users can sign in, save, and load projects.
 
-- [ ] Supabase setup: database schema, RLS policies, storage buckets
-- [ ] Auth: sign up, sign in, sign out (email + Google OAuth)
-- [ ] Create/list/delete projects
-- [ ] Save scene state to DB (serialize store → JSON → scenes table)
-- [ ] Load scene state from DB (JSON → hydrate store → render)
-- [ ] Auto-save (debounced, every 30s or on blur)
-- [ ] Project thumbnail generation (render scene to canvas → upload)
+- [x] Supabase setup: database schema (6 tables), RLS policies, storage buckets (assets + thumbnails), triggers
+- [x] Auth: sign up, sign in, sign out (email magic link + Google OAuth) with middleware session refresh
+- [x] Create/list/delete projects (dashboard page + API routes)
+- [x] Save scene state to DB (serialize store → JSON → PUT /api/projects/[id]/scene)
+- [x] Load scene state from DB (GET /api/projects/[id] → hydrate store → render)
+- [x] Auto-save (30s interval + on blur + on beforeunload via sendBeacon) + manual Ctrl+S
+- [x] Project thumbnail generation (canvas → blob → Supabase Storage → project metadata)
 
-**Success criteria:** User can sign in, create a project, add objects, close browser, reopen, and scene is exactly as they left it.
+**Success criteria:** User can sign in, create a project, add objects, close browser, reopen, and scene is exactly as they left it. ✅ MET
 
 ### Phase 3: Asset Upload & Management (Week 6)
 **Goal:** Users can upload and manage their own 3D files.

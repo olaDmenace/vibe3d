@@ -8,6 +8,7 @@ const EditorLayout = dynamic(
   { ssr: false }
 );
 
+// Standalone editor (no project persistence — for unauthenticated quick use)
 export default function EditorPage() {
   return <EditorLayout />;
 }

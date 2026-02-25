@@ -1,5 +1,9 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const TRUST_LOGOS = [
   { src: "/assets/logos/scale.png", alt: "Scale", width: 64, height: 20 },
@@ -14,6 +18,49 @@ const TRUST_LOGOS = [
 ];
 
 export default function SignInPage() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const supabase = createClient();
+
+  async function handleGoogleSignIn() {
+    setLoading(true);
+    setMessage(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setMessage({ type: "error", text: error.message });
+      setLoading(false);
+    }
+  }
+
+  async function handleEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      setMessage({ type: "error", text: error.message });
+    } else {
+      setMessage({ type: "success", text: "Check your email for a login link!" });
+    }
+    setLoading(false);
+  }
+
   return (
     <div className="flex h-screen bg-[#101010]" style={{ fontFamily: "'Aeonik Pro', sans-serif" }}>
       {/* Left — Auth form */}
@@ -45,7 +92,11 @@ export default function SignInPage() {
           {/* Auth card */}
           <div className="mt-8 w-full max-w-[400px] rounded-[18px] border border-[rgba(222,220,209,0.15)] bg-[#141413] p-7 shadow-[0px_4px_24px_0px_rgba(0,0,0,0.02),0px_4px_32px_0px_rgba(0,0,0,0.02)]">
             {/* Google button */}
-            <button className="flex h-11 w-full items-center justify-center gap-3 rounded-[9px] border border-[rgba(222,220,209,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.05)]">
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="flex h-11 w-full items-center justify-center gap-3 rounded-[9px] border border-[rgba(222,220,209,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-50"
+            >
               <Image
                 src="/assets/icons/google-logo.svg"
                 alt="Google"
@@ -65,16 +116,34 @@ export default function SignInPage() {
             </div>
 
             {/* Email form */}
-            <div className="space-y-4">
+            <form onSubmit={handleEmailSignIn} className="space-y-4">
               <input
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-base text-[#faf9f5] placeholder:text-[#9c9a92] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)]"
+                disabled={loading}
+                className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-base text-[#faf9f5] placeholder:text-[#9c9a92] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
               />
-              <button className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3]">
-                Continue with email
+              <button
+                type="submit"
+                disabled={loading || !email.trim()}
+                className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+              >
+                {loading ? "Sending..." : "Continue with email"}
               </button>
-            </div>
+            </form>
+
+            {/* Status message */}
+            {message && (
+              <p
+                className={`mt-4 text-center text-sm ${
+                  message.type === "success" ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {message.text}
+              </p>
+            )}
 
             {/* Privacy */}
             <p className="mt-5 text-center text-xs text-[#9c9a92]">

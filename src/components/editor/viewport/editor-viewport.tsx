@@ -22,6 +22,7 @@ export function EditorViewport() {
     <div className="relative h-full w-full bg-editor-viewport-bg">
       <Canvas
         shadows
+        gl={{ preserveDrawingBuffer: true }}
         camera={{
           position: camera.position,
           fov: camera.fov,

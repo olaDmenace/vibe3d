@@ -16,8 +16,11 @@ import {
   Redo,
   Trash2,
   Copy,
+  ArrowLeft,
+  Save,
 } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
+import Link from "next/link";
 
 const TOOLS: { tool: ActiveTool; icon: React.ReactNode; label: string }[] = [
   { tool: "select", icon: <MousePointer2 size={16} />, label: "Select (V)" },
@@ -34,7 +37,13 @@ const PRIMITIVES: { type: string; icon: React.ReactNode; label: string }[] = [
   { type: "cone", icon: <Triangle size={16} />, label: "Cone" },
 ];
 
-export function EditorToolbar() {
+type EditorToolbarProps = {
+  projectId?: string;
+  projectName?: string;
+};
+
+export function EditorToolbar({ projectId, projectName }: EditorToolbarProps = {}) {
+  const [saving, setSaving] = useState(false);
   const activeTool = useEditorStore((s) => s.activeTool);
   const setActiveTool = useEditorStore((s) => s.setActiveTool);
   const dispatch = useEditorStore((s) => s.dispatch);
@@ -93,11 +102,32 @@ export function EditorToolbar() {
     }
   }, [dispatch, selectedObjectId]);
 
+  const manualSave = useCallback(async () => {
+    if (!projectId || saving) return;
+    setSaving(true);
+    const sceneState = useEditorStore.getState().getSerializableState();
+    await fetch(`/api/projects/${projectId}/scene`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_graph: sceneState }),
+    });
+    setSaving(false);
+  }, [projectId, saving]);
+
   return (
     <div className="flex h-11 items-center gap-1 border-b border-editor-border bg-editor-surface px-3">
-      {/* Logo / App name */}
+      {/* Back + project name */}
+      {projectId ? (
+        <Link
+          href="/dashboard"
+          className="mr-1 flex h-7 w-7 items-center justify-center rounded text-editor-text-muted transition-colors hover:bg-editor-surface-hover hover:text-editor-text"
+          title="Back to Dashboard"
+        >
+          <ArrowLeft size={16} />
+        </Link>
+      ) : null}
       <span className="mr-3 text-sm font-semibold text-editor-text">
-        Vibe3D
+        {projectName || "Vibe3D"}
       </span>
 
       <div className="mr-2 h-5 w-px bg-editor-border" />
@@ -169,6 +199,22 @@ export function EditorToolbar() {
       >
         <Trash2 size={16} />
       </button>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Manual save */}
+      {projectId && (
+        <button
+          onClick={manualSave}
+          disabled={saving}
+          title="Save (Ctrl+S)"
+          className="flex h-7 items-center gap-1.5 rounded px-2 text-editor-text-muted transition-colors hover:bg-editor-surface-hover hover:text-editor-text disabled:opacity-50"
+        >
+          <Save size={14} />
+          <span className="text-xs">{saving ? "Saving..." : "Save"}</span>
+        </button>
+      )}
     </div>
   );
 }

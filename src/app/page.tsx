@@ -108,7 +108,7 @@ export default function LandingPage() {
             />
           </Link>
           <Link
-            href="/editor"
+            href="/dashboard"
             className="inline-flex items-center rounded-md border border-[#3f3f46] px-5 py-2.5 text-sm font-medium text-[#d4d4d8] transition-colors hover:border-[#52525b] hover:text-[#fafafa]"
           >
             Start Building

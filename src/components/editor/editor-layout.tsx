@@ -5,14 +5,20 @@ import { EditorViewport } from "./viewport/editor-viewport";
 import { ChatPanel } from "./chat/chat-panel";
 import { RightSidebar } from "./panels/right-sidebar";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { EditorTour } from "./tour/editor-tour";
 
-export function EditorLayout() {
+type EditorLayoutProps = {
+  projectId?: string;
+  projectName?: string;
+};
+
+export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {}) {
   useKeyboardShortcuts();
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-editor-bg">
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-editor-bg">
       {/* Top toolbar */}
-      <EditorToolbar />
+      <EditorToolbar projectId={projectId} projectName={projectName} />
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
@@ -27,6 +33,9 @@ export function EditorLayout() {
         {/* Right: Sidebar (hierarchy, properties, assets) */}
         <RightSidebar />
       </div>
+
+      {/* Guided tour overlay */}
+      <EditorTour />
     </div>
   );
 }
