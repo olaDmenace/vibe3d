@@ -22,12 +22,6 @@ const TRUST_LOGOS = [
   { src: "/assets/logos/accenture.png", alt: "Accenture", width: 80, height: 20 },
 ];
 
-// Button layout matches Figma: row1 = 2, row2 = 3, row3 = 2
-const ROWS = [
-  USE_CASES.slice(0, 2),
-  USE_CASES.slice(2, 5),
-  USE_CASES.slice(5, 7),
-];
 
 export default function OnboardingPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -120,36 +114,42 @@ export default function OnboardingPage() {
           </p>
 
           {/* Use case grid */}
-          <div className="mt-8 flex flex-col gap-[15px]">
-            {ROWS.map((row, rowIndex) => (
-              <div key={rowIndex} className="flex gap-[15px]">
-                {row.map((uc) => (
-                  <button
-                    key={uc.id}
-                    onClick={() => toggleUseCase(uc.id)}
-                    className={`group relative flex h-[60px] items-center gap-3 rounded-[9px] border px-5 transition-all ${
-                      selected.has(uc.id)
-                        ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
-                        : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
-                    }`}
+          <div className="mt-8 flex flex-wrap gap-[15px]">
+            {USE_CASES.map((uc) => (
+              <button
+                key={uc.id}
+                onClick={() => toggleUseCase(uc.id)}
+                className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
+                  selected.has(uc.id)
+                    ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
+                    : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
+                }`}
+              >
+                {/* Selected glow effect — Figma gradient SVG overlay */}
+                {selected.has(uc.id) && (
+                  <div
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-[9px]"
+                    style={{ mixBlendMode: "plus-lighter" }}
                   >
-                    {/* Selected glow effect */}
-                    {selected.has(uc.id) && (
-                      <div className="pointer-events-none absolute inset-0 rounded-[9px] bg-gradient-to-r from-[rgba(200,160,140,0.15)] via-[rgba(180,140,200,0.1)] to-transparent" />
-                    )}
-                    <Image
-                      src={uc.icon}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/assets/icons/onboarding-selected-glow.svg"
                       alt=""
-                      width={24}
-                      height={24}
-                      className="relative z-10 opacity-70"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
-                    <span className="relative z-10 whitespace-nowrap text-[14.8px] text-[#e5e5e5]">
-                      {uc.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                  </div>
+                )}
+                <Image
+                  src={uc.icon}
+                  alt=""
+                  width={22}
+                  height={22}
+                  className="relative z-10 shrink-0 opacity-70"
+                />
+                <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
+                  {uc.label}
+                </span>
+              </button>
             ))}
           </div>
 
@@ -186,17 +186,86 @@ export default function OnboardingPage() {
         </div>
       </div>
 
-      {/* Right — Editor preview */}
+      {/* Right — Editor preview mockup */}
       <div className="relative m-6 ml-0 hidden flex-1 overflow-hidden rounded-[20px] border border-[rgba(222,220,209,0.15)] bg-[#262624] backdrop-blur-[16px] lg:block">
-        <Image
-          src="/assets/images/hero-3d-model.png"
-          alt="3D editor preview"
-          fill
-          className="object-cover"
-          priority
-        />
-        {/* Bottom warm gradient */}
-        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-[rgba(180,140,120,0.4)] via-[rgba(160,120,100,0.2)] to-transparent" />
+        {/* Subtle background glow layers */}
+        <div className="absolute -left-[200px] -top-[100px] h-[800px] w-[900px] opacity-20" style={{ mixBlendMode: "plus-lighter" }}>
+          <div className="absolute inset-0 rounded-full bg-[#507AEF] blur-[120px]" />
+        </div>
+        <div className="absolute -bottom-[100px] left-[100px] h-[600px] w-[700px] opacity-15" style={{ mixBlendMode: "plus-lighter" }}>
+          <div className="absolute inset-0 rounded-full bg-[#FF774F] blur-[120px]" />
+        </div>
+
+        {/* Editor mockup frame */}
+        <div className="absolute inset-[60px_50px_120px_50px] rounded-[18px] bg-[#262624] shadow-[0_0_0_1px_rgba(255,255,255,0.1)]">
+          {/* Mockup top bar */}
+          <div className="flex h-8 items-center gap-2 rounded-t-[18px] border-b border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] px-4">
+            <div className="flex gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-[rgba(255,255,255,0.15)]" />
+              <div className="h-2 w-2 rounded-full bg-[rgba(255,255,255,0.15)]" />
+              <div className="h-2 w-2 rounded-full bg-[rgba(255,255,255,0.15)]" />
+            </div>
+            <span className="ml-2 text-[10px] text-[rgba(255,255,255,0.4)]">Untitled</span>
+          </div>
+
+          {/* Mockup sidebar */}
+          <div className="absolute bottom-0 left-0 top-8 w-[140px] border-r border-[rgba(255,255,255,0.05)] bg-[#1f1f18]">
+            <div className="p-3">
+              <div className="text-[9px] text-[rgba(255,255,255,0.5)]">Scenes</div>
+              <div className="mt-2 rounded bg-[rgba(255,255,255,0.05)] px-2 py-1 text-[9px] text-[rgba(255,255,255,0.7)]">Scene 1</div>
+              <div className="mt-3 rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[8px] text-[rgba(255,255,255,0.3)]">Search</div>
+              <div className="mt-3 text-[9px] text-[rgba(255,255,255,0.7)]">Digital Camera</div>
+            </div>
+          </div>
+
+          {/* Mockup viewport with 3D camera */}
+          <div className="absolute bottom-0 left-[140px] right-[140px] top-8 bg-[#262624]">
+            <div className="relative flex h-full items-center justify-center">
+              <Image
+                src="/assets/images/editor-preview-camera.png"
+                alt="3D camera model"
+                width={320}
+                height={420}
+                className="object-contain drop-shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+                priority
+              />
+              {/* Blue selection handles */}
+              <div className="pointer-events-none absolute inset-[15%_20%] border border-[#437dfd]">
+                <div className="absolute -left-1 -top-1 h-2 w-2 border border-[#437dfd] bg-white" />
+                <div className="absolute -right-1 -top-1 h-2 w-2 border border-[#437dfd] bg-white" />
+                <div className="absolute -bottom-1 -left-1 h-2 w-2 border border-[#437dfd] bg-white" />
+                <div className="absolute -bottom-1 -right-1 h-2 w-2 border border-[#437dfd] bg-white" />
+              </div>
+            </div>
+          </div>
+
+          {/* Mockup right panel */}
+          <div className="absolute bottom-0 right-0 top-8 w-[140px] border-l border-[rgba(255,255,255,0.05)] bg-[#1f1f18]">
+            <div className="p-3">
+              <div className="flex gap-1">
+                <div className="rounded bg-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[8px] text-[rgba(255,255,255,0.6)]">Share</div>
+                <div className="rounded bg-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[8px] text-[rgba(255,255,255,0.6)]">Export</div>
+              </div>
+              <div className="mt-3 text-[8px] text-[rgba(255,255,255,0.5)]">Page</div>
+              <div className="mt-2 text-[8px] text-[rgba(255,255,255,0.5)]">Transform</div>
+              <div className="mt-1 flex gap-1">
+                <span className="text-[7px] text-[rgba(255,255,255,0.4)]">Position</span>
+                <span className="text-[7px] text-[#10b981]">X</span>
+                <span className="text-[7px] text-[rgba(255,255,255,0.6)]">3.50</span>
+                <span className="text-[7px] text-[#10b981]">Y</span>
+                <span className="text-[7px] text-[rgba(255,255,255,0.6)]">-135</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Mockup chat input */}
+          <div className="absolute bottom-3 left-[155px] right-[155px] h-[50px] rounded-xl bg-[rgba(62,62,62,0.5)] px-3 pt-2">
+            <span className="text-[9px] text-[rgba(255,255,255,0.35)]">Start creating...</span>
+          </div>
+        </div>
+
+        {/* Bottom warm gradient fade */}
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[rgba(180,130,110,0.5)] via-[rgba(160,110,90,0.25)] to-transparent" />
       </div>
     </div>
   );

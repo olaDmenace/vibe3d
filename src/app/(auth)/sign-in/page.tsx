@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const TRUST_LOGOS = [
@@ -19,10 +20,31 @@ const TRUST_LOGOS = [
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   const supabase = createClient();
+
+  // Show callback errors from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("error");
+    const desc = params.get("error_description");
+    if (error) {
+      setMessage({ type: "error", text: desc || error });
+    }
+  }, []);
+
+  // Auto-focus OTP input when step changes
+  useEffect(() => {
+    if (step === "otp") {
+      otpInputRef.current?.focus();
+    }
+  }, [step]);
 
   async function handleGoogleSignIn() {
     setLoading(true);
@@ -39,7 +61,7 @@ export default function SignInPage() {
     }
   }
 
-  async function handleEmailSignIn(e: React.FormEvent) {
+  async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
 
@@ -48,17 +70,47 @@ export default function SignInPage() {
 
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
     });
 
     if (error) {
       setMessage({ type: "error", text: error.message });
     } else {
-      setMessage({ type: "success", text: "Check your email for a login link!" });
+      setStep("otp");
+      setMessage({ type: "success", text: "We sent an 8-digit code to your email." });
     }
     setLoading(false);
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!otpCode.trim()) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: otpCode.trim(),
+      type: "email",
+    });
+
+    if (error) {
+      setMessage({ type: "error", text: error.message });
+      setLoading(false);
+    } else {
+      // Signed in — check onboarding status and redirect
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const onboardingCompleted = user?.user_metadata?.onboarding_completed;
+      router.push(onboardingCompleted ? "/dashboard" : "/onboarding");
+    }
+  }
+
+  function handleBackToEmail() {
+    setStep("email");
+    setOtpCode("");
+    setMessage(null);
   }
 
   return (
@@ -86,53 +138,92 @@ export default function SignInPage() {
             Vibe3D
           </h1>
           <p className="mt-2 text-center text-sm text-[rgba(255,255,255,0.52)]">
-            Log in or register with your email.
+            {step === "email"
+              ? "Log in or register with your email."
+              : `Enter the code sent to ${email}`}
           </p>
 
           {/* Auth card */}
           <div className="mt-8 w-full max-w-[400px] rounded-[18px] border border-[rgba(222,220,209,0.15)] bg-[#141413] p-7 shadow-[0px_4px_24px_0px_rgba(0,0,0,0.02),0px_4px_32px_0px_rgba(0,0,0,0.02)]">
-            {/* Google button */}
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="flex h-11 w-full items-center justify-center gap-3 rounded-[9px] border border-[rgba(222,220,209,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-50"
-            >
-              <Image
-                src="/assets/icons/google-logo.svg"
-                alt="Google"
-                width={16}
-                height={15}
-              />
-              <span className="text-base text-[#faf9f5]">
-                Continue with Google
-              </span>
-            </button>
+            {step === "email" ? (
+              <>
+                {/* Google button */}
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  className="flex h-11 w-full items-center justify-center gap-3 rounded-[9px] border border-[rgba(222,220,209,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-50"
+                >
+                  <Image
+                    src="/assets/icons/google-logo.svg"
+                    alt="Google"
+                    width={16}
+                    height={15}
+                  />
+                  <span className="text-base text-[#faf9f5]">
+                    Continue with Google
+                  </span>
+                </button>
 
-            {/* Divider */}
-            <div className="my-4 flex items-center justify-center">
-              <span className="text-xs tracking-wider text-[#c2c0b6] uppercase">
-                or
-              </span>
-            </div>
+                {/* Divider */}
+                <div className="my-4 flex items-center justify-center">
+                  <span className="text-xs tracking-wider text-[#c2c0b6] uppercase">
+                    or
+                  </span>
+                </div>
 
-            {/* Email form */}
-            <form onSubmit={handleEmailSignIn} className="space-y-4">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                disabled={loading}
-                className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-base text-[#faf9f5] placeholder:text-[#9c9a92] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={loading || !email.trim()}
-                className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
-              >
-                {loading ? "Sending..." : "Continue with email"}
-              </button>
-            </form>
+                {/* Email form */}
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    disabled={loading}
+                    className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-base text-[#faf9f5] placeholder:text-[#9c9a92] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+                  >
+                    {loading ? "Sending..." : "Continue with email"}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                {/* OTP verification form */}
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <input
+                    ref={otpInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="8-digit code"
+                    disabled={loading}
+                    className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-center text-xl tracking-[0.3em] text-[#faf9f5] placeholder:text-[#9c9a92] placeholder:tracking-normal placeholder:text-base outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || otpCode.length < 8}
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+                  >
+                    {loading ? "Verifying..." : "Verify code"}
+                  </button>
+                </form>
+
+                {/* Back link */}
+                <button
+                  onClick={handleBackToEmail}
+                  className="mt-3 w-full text-center text-sm text-[#9c9a92] transition-colors hover:text-[#c2c0b6]"
+                >
+                  Use a different email
+                </button>
+              </>
+            )}
 
             {/* Status message */}
             {message && (
