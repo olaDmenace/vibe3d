@@ -50,5 +50,16 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Redirect authenticated users who haven't completed onboarding
+  if (
+    user &&
+    !user.user_metadata?.onboarding_completed &&
+    request.nextUrl.pathname.startsWith("/dashboard")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/onboarding";
+    return NextResponse.redirect(url);
+  }
+
   return supabaseResponse;
 }

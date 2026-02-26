@@ -3,6 +3,7 @@
 import { EditorToolbar } from "./toolbar/editor-toolbar";
 import { EditorViewport } from "./viewport/editor-viewport";
 import { ChatPanel } from "./chat/chat-panel";
+import { LeftSidebar } from "./panels/left-sidebar";
 import { RightSidebar } from "./panels/right-sidebar";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { EditorTour } from "./tour/editor-tour";
@@ -16,23 +17,23 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
   useKeyboardShortcuts();
 
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-editor-bg">
-      {/* Top toolbar */}
+    <div className="relative h-screen w-screen overflow-hidden bg-[#262624]">
+      {/* Full-screen 3D Viewport */}
+      <div className="absolute inset-0">
+        <EditorViewport />
+      </div>
+
+      {/* Floating left sidebar (fixed positioned) */}
+      <LeftSidebar projectId={projectId} projectName={projectName} />
+
+      {/* Floating right sidebar (fixed positioned) */}
+      <RightSidebar />
+
+      {/* Floating toolbar (absolute positioned) */}
       <EditorToolbar projectId={projectId} projectName={projectName} />
 
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: AI Chat panel */}
-        <ChatPanel />
-
-        {/* Center: 3D Viewport */}
-        <div className="flex-1 overflow-hidden">
-          <EditorViewport />
-        </div>
-
-        {/* Right: Sidebar (hierarchy, properties, assets) */}
-        <RightSidebar />
-      </div>
+      {/* Floating chat input (absolute positioned) */}
+      <ChatPanel />
 
       {/* Guided tour overlay */}
       <EditorTour />

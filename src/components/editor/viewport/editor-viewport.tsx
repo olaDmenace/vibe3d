@@ -19,7 +19,7 @@ export function EditorViewport() {
   };
 
   return (
-    <div className="relative h-full w-full bg-editor-viewport-bg">
+    <div className="relative h-full w-full bg-[#262624]">
       <Canvas
         shadows
         gl={{ preserveDrawingBuffer: true }}
