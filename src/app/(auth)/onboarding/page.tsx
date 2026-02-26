@@ -1,10 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+// Step 2: "How did you hear about us?"
+const REFERRAL_SOURCES = [
+  { id: "google", label: "Google / Search Engine", icon: "/assets/icons/onboarding-referral-search.svg" },
+  { id: "friend", label: "Friend or Colleague", icon: "/assets/icons/onboarding-referral-friend.svg" },
+  { id: "blog", label: "Blog / Article", icon: "/assets/icons/onboarding-referral-blog.svg" },
+  { id: "twitter", label: "X/Twitter", icon: "/assets/icons/onboarding-referral-twitter.svg" },
+  { id: "youtube", label: "YouTube / Video", icon: "/assets/icons/onboarding-referral-youtube.svg" },
+  { id: "ad", label: "Advertisement", icon: "/assets/icons/onboarding-referral-ad.svg" },
+  { id: "other", label: "Other", icon: "/assets/icons/onboarding-referral-other.svg" },
+];
+
+// Step 3: "What's your primary use case?"
 const USE_CASES = [
   { id: "game-dev", label: "Game Development", icon: "/assets/icons/onboarding-game.svg" },
   { id: "product-design", label: "Product Design", icon: "/assets/icons/onboarding-product.svg" },
@@ -22,11 +34,16 @@ const TRUST_LOGOS = [
   { src: "/assets/logos/accenture.png", alt: "Accenture", width: 80, height: 20 },
 ];
 
+type Step = "name" | "referral" | "use-cases";
 
 export default function OnboardingPage() {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [step, setStep] = useState<Step>("name");
+  const [displayName, setDisplayName] = useState("");
+  const [selectedReferrals, setSelectedReferrals] = useState<Set<string>>(new Set());
+  const [selectedUseCases, setSelectedUseCases] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -49,8 +66,15 @@ export default function OnboardingPage() {
     check();
   }, [supabase, router]);
 
-  const toggleUseCase = (id: string) => {
-    setSelected((prev) => {
+  // Auto-focus name input
+  useEffect(() => {
+    if (ready && step === "name") {
+      nameInputRef.current?.focus();
+    }
+  }, [ready, step]);
+
+  const toggleReferral = (id: string) => {
+    setSelectedReferrals((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -58,13 +82,34 @@ export default function OnboardingPage() {
     });
   };
 
-  const handleGetStarted = async () => {
+  const toggleUseCase = (id: string) => {
+    setSelectedUseCases((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim()) return;
+    setStep("referral");
+  };
+
+  const handleReferralContinue = () => {
+    setStep("use-cases");
+  };
+
+  const handleFinish = async () => {
     setLoading(true);
     try {
       await supabase.auth.updateUser({
         data: {
+          display_name: displayName.trim(),
+          referral_source: Array.from(selectedReferrals),
+          use_cases: Array.from(selectedUseCases),
           onboarding_completed: true,
-          use_cases: Array.from(selected),
         },
       });
     } catch {
@@ -100,67 +145,32 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* Heading */}
-          <h1
-            className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
-            style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
-          >
-            What&apos;s your primary
-            <br />
-            use case?
-          </h1>
-          <p className="mt-3 text-sm text-[rgba(255,255,255,0.52)]">
-            Select all that apply
-          </p>
+          {/* Step content */}
+          {step === "name" && (
+            <NameStep
+              displayName={displayName}
+              setDisplayName={setDisplayName}
+              onSubmit={handleNameSubmit}
+              nameInputRef={nameInputRef}
+            />
+          )}
 
-          {/* Use case grid */}
-          <div className="mt-8 flex flex-wrap gap-[15px]">
-            {USE_CASES.map((uc) => (
-              <button
-                key={uc.id}
-                onClick={() => toggleUseCase(uc.id)}
-                className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
-                  selected.has(uc.id)
-                    ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
-                    : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
-                }`}
-              >
-                {/* Selected glow effect — Figma gradient SVG overlay */}
-                {selected.has(uc.id) && (
-                  <div
-                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-[9px]"
-                    style={{ mixBlendMode: "plus-lighter" }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/assets/icons/onboarding-selected-glow.svg"
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                  </div>
-                )}
-                <Image
-                  src={uc.icon}
-                  alt=""
-                  width={22}
-                  height={22}
-                  className="relative z-10 shrink-0 opacity-70"
-                />
-                <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
-                  {uc.label}
-                </span>
-              </button>
-            ))}
-          </div>
+          {step === "referral" && (
+            <ReferralStep
+              selected={selectedReferrals}
+              onToggle={toggleReferral}
+              onContinue={handleReferralContinue}
+            />
+          )}
 
-          {/* Get Started button */}
-          <button
-            onClick={handleGetStarted}
-            disabled={loading}
-            className="mt-8 flex h-[44px] w-[151px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base font-medium text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Get Started"}
-          </button>
+          {step === "use-cases" && (
+            <UseCaseStep
+              selected={selectedUseCases}
+              onToggle={toggleUseCase}
+              onFinish={handleFinish}
+              loading={loading}
+            />
+          )}
         </div>
 
         {/* Trust logos */}
@@ -268,5 +278,200 @@ export default function OnboardingPage() {
         <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[rgba(180,130,110,0.5)] via-[rgba(160,110,90,0.25)] to-transparent" />
       </div>
     </div>
+  );
+}
+
+/* ─── Step 1: Name ─── */
+function NameStep({
+  displayName,
+  setDisplayName,
+  onSubmit,
+  nameInputRef,
+}: {
+  displayName: string;
+  setDisplayName: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  nameInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <>
+      <h1
+        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
+      >
+        Welcome to Vibe3D
+      </h1>
+      <p className="mt-4 text-sm text-[rgba(255,255,255,0.52)]">
+        Let&apos;s get to know you better so we can personalize your experience.
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-8">
+        <label className="text-sm text-white">
+          What&apos;s your name? <span className="text-red-500">*</span>
+        </label>
+        <input
+          ref={nameInputRef}
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="John Doe"
+          className="mt-3.5 h-[60px] w-full max-w-[452px] rounded-[9px] border border-[rgba(222,220,209,0.3)] bg-transparent px-6 text-[14.8px] text-[#e5e5e5] placeholder:text-[#e5e5e5]/50 outline-none transition-colors focus:border-[rgba(222,220,209,0.5)]"
+        />
+        <button
+          type="submit"
+          disabled={!displayName.trim()}
+          className="mt-7 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+        >
+          Get Started
+        </button>
+      </form>
+    </>
+  );
+}
+
+/* ─── Step 2: Referral Source ─── */
+function ReferralStep({
+  selected,
+  onToggle,
+  onContinue,
+}: {
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onContinue: () => void;
+}) {
+  return (
+    <>
+      <h1
+        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
+      >
+        How did you hear
+        <br />
+        about us?
+      </h1>
+      <p className="mt-4 text-sm text-[rgba(255,255,255,0.52)]">
+        This helps us understand what&apos;s working
+      </p>
+
+      <div className="mt-8 flex flex-wrap gap-[15px]">
+        {REFERRAL_SOURCES.map((src) => (
+          <button
+            key={src.id}
+            onClick={() => onToggle(src.id)}
+            className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
+              selected.has(src.id)
+                ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
+                : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
+            }`}
+          >
+            {selected.has(src.id) && (
+              <div
+                className="pointer-events-none absolute inset-0 overflow-hidden rounded-[9px]"
+                style={{ mixBlendMode: "plus-lighter" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/assets/icons/onboarding-selected-glow.svg"
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </div>
+            )}
+            <Image
+              src={src.icon}
+              alt=""
+              width={22}
+              height={22}
+              className="relative z-10 shrink-0 opacity-70"
+            />
+            <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
+              {src.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={onContinue}
+        className="mt-8 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3]"
+      >
+        Continue
+      </button>
+    </>
+  );
+}
+
+/* ─── Step 3: Use Cases ─── */
+function UseCaseStep({
+  selected,
+  onToggle,
+  onFinish,
+  loading,
+}: {
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onFinish: () => void;
+  loading: boolean;
+}) {
+  return (
+    <>
+      <h1
+        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
+      >
+        What&apos;s your primary
+        <br />
+        use case?
+      </h1>
+      <p className="mt-4 text-sm text-[rgba(255,255,255,0.52)]">
+        Select all that apply
+      </p>
+
+      <div className="mt-8 flex flex-wrap gap-[15px]">
+        {USE_CASES.map((uc) => (
+          <button
+            key={uc.id}
+            onClick={() => onToggle(uc.id)}
+            className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
+              selected.has(uc.id)
+                ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
+                : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
+            }`}
+          >
+            {selected.has(uc.id) && (
+              <div
+                className="pointer-events-none absolute inset-0 overflow-hidden rounded-[9px]"
+                style={{ mixBlendMode: "plus-lighter" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/assets/icons/onboarding-selected-glow.svg"
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </div>
+            )}
+            <Image
+              src={uc.icon}
+              alt=""
+              width={22}
+              height={22}
+              className="relative z-10 shrink-0 opacity-70"
+            />
+            <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
+              {uc.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={onFinish}
+        disabled={loading}
+        className="mt-8 flex h-[44px] w-[151px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base font-medium text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+      >
+        {loading ? "Loading..." : "Get Started"}
+      </button>
+    </>
   );
 }
