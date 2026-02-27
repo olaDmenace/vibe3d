@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
+import { useTheme } from "@/components/theme-provider";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 const PLAN_CONFIGS_LOCAL = PLAN_CONFIGS;
 
@@ -209,8 +211,13 @@ export function SettingsModal({
   const [nameInput, setNameInput] = useState(userName);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  // Theme from context (actually applies the theme)
+  const { theme, setTheme: setGlobalTheme } = useTheme();
+
+  // Push notifications
+  const { supported: pushSupported, permission: pushPermission, requestPermission } = usePushNotifications();
+
   // Preferences state
-  const [theme, setTheme] = useState<ThemeOption>("dark");
   const [language, setLanguage] = useState("en");
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
@@ -239,7 +246,7 @@ export function SettingsModal({
       .then((data) => {
         if (data.preferences) {
           const p = data.preferences as UserPreferences;
-          setTheme(p.theme ?? "dark");
+          setGlobalTheme(p.theme ?? "dark");
           setLanguage(p.language ?? "en");
           setPushNotifications(p.push_notifications ?? true);
           setEmailUpdates(p.email_updates ?? false);
@@ -360,11 +367,18 @@ export function SettingsModal({
   );
 
   const handleThemeChange = (t: ThemeOption) => {
-    setTheme(t);
+    setGlobalTheme(t);
     savePreferences({ theme: t, language, push_notifications: pushNotifications, email_updates: emailUpdates });
   };
 
-  const handlePushNotificationsChange = (v: boolean) => {
+  const handlePushNotificationsChange = async (v: boolean) => {
+    if (v && pushSupported && pushPermission !== "granted") {
+      const granted = await requestPermission();
+      if (!granted) {
+        showToast("Browser notification permission denied. Enable it in browser settings.", "error");
+        return;
+      }
+    }
     setPushNotifications(v);
     savePreferences({ theme, language, push_notifications: v, email_updates: emailUpdates });
   };
@@ -413,7 +427,7 @@ export function SettingsModal({
           width: 650,
           height: modalHeight,
           maxHeight: "90vh",
-          background: "#2C2C2C",
+          background: "var(--card-bg)",
           boxShadow: "inset 0px 0.5px 0px rgba(255, 255, 255, 0.08)",
           borderRadius: 13,
           fontFamily: "'Aeonik Pro', sans-serif",
@@ -609,7 +623,7 @@ export function SettingsModal({
                       <button
                         onClick={() => { setEditingName(false); setNameInput(userName); }}
                         className="text-left transition-opacity hover:opacity-80"
-                        style={{ fontSize: 10.8, lineHeight: "16px", letterSpacing: "0.055px", color: "#A3A3A3" }}
+                        style={{ fontSize: 10.8, lineHeight: "16px", letterSpacing: "0.055px", color: "var(--text-muted)" }}
                       >
                         Cancel
                       </button>
@@ -666,10 +680,10 @@ export function SettingsModal({
                 className="absolute flex flex-col"
                 style={{ left: 50, top: 32, gap: 5 }}
               >
-                <span style={{ fontSize: 24, lineHeight: "36px", color: "#E5E5E5" }}>
+                <span style={{ fontSize: 24, lineHeight: "36px", color: "var(--text-primary)" }}>
                   Preferences
                 </span>
-                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#A3A3A3" }}>
+                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "var(--text-muted)" }}>
                   Customize your Vibe3D experience
                 </span>
               </div>
@@ -682,20 +696,20 @@ export function SettingsModal({
                   height: 257,
                   left: 50,
                   top: 108,
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
+                  background: "var(--card-bg-secondary)",
+                  border: "1px solid var(--border-strong)",
                   borderRadius: 12,
                 }}
               >
                 <span
                   className="absolute"
-                  style={{ left: 25, top: 25, fontSize: 13.8, lineHeight: "21px", color: "#E5E5E5" }}
+                  style={{ left: 25, top: 25, fontSize: 13.8, lineHeight: "21px", color: "var(--text-primary)" }}
                 >
                   Appearance
                 </span>
                 <span
                   className="absolute"
-                  style={{ left: 25, top: 62, fontSize: 13.8, lineHeight: "21px", color: "#A3A3A3" }}
+                  style={{ left: 25, top: 62, fontSize: 13.8, lineHeight: "21px", color: "var(--text-muted)" }}
                 >
                   Theme
                 </span>
@@ -713,11 +727,11 @@ export function SettingsModal({
                       style={{
                         height: 47,
                         borderRadius: theme === opt ? 9 : 8,
-                        background: theme === opt ? "#FAF9F5" : "#1A1A1A",
-                        border: theme === opt ? "none" : "1px solid #3A3A3A",
+                        background: theme === opt ? "var(--text-primary)" : "var(--input-bg)",
+                        border: theme === opt ? "none" : "1px solid var(--border-strong)",
                         fontSize: 13.7,
                         lineHeight: "21px",
-                        color: theme === opt ? "#000000" : "#E5E5E5",
+                        color: theme === opt ? "var(--card-bg)" : "var(--text-primary)",
                       }}
                     >
                       {opt}
@@ -727,7 +741,7 @@ export function SettingsModal({
 
                 <span
                   className="absolute"
-                  style={{ left: 25, top: 158, fontSize: 13.7, lineHeight: "21px", color: "#A3A3A3" }}
+                  style={{ left: 25, top: 158, fontSize: 13.7, lineHeight: "21px", color: "var(--text-muted)" }}
                 >
                   Language
                 </span>
@@ -740,14 +754,14 @@ export function SettingsModal({
                     right: 27,
                     top: 186.75,
                     height: 45,
-                    background: "#1A1A1A",
-                    border: "1px solid #3A3A3A",
+                    background: "var(--input-bg)",
+                    border: "1px solid var(--border-strong)",
                     borderRadius: 8,
                     paddingLeft: 21,
                     paddingRight: 14,
                   }}
                 >
-                  <span style={{ fontSize: 13.7, lineHeight: "16px", color: "#E5E5E5" }}>
+                  <span style={{ fontSize: 13.7, lineHeight: "16px", color: "var(--text-primary)" }}>
                     {language === "en" ? "English" : language}
                   </span>
                   <ChevronDownIcon />
@@ -762,14 +776,14 @@ export function SettingsModal({
                   right: 50,
                   top: 375,
                   height: 228,
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
+                  background: "var(--card-bg-secondary)",
+                  border: "1px solid var(--border-strong)",
                   borderRadius: 12,
                 }}
               >
                 <span
                   className="absolute"
-                  style={{ left: 25, top: 25, fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5" }}
+                  style={{ left: 25, top: 25, fontSize: 13.7, lineHeight: "21px", color: "var(--text-primary)" }}
                 >
                   Notifications
                 </span>
@@ -783,11 +797,13 @@ export function SettingsModal({
                     <Checkbox checked={pushNotifications} onChange={handlePushNotificationsChange} />
                   </div>
                   <div className="flex flex-col" style={{ marginLeft: 12 }}>
-                    <span style={{ fontSize: 13.6, lineHeight: "21px", color: "#E5E5E5", paddingTop: 12 }}>
+                    <span style={{ fontSize: 13.6, lineHeight: "21px", color: "var(--text-primary)", paddingTop: 12 }}>
                       Push notifications
                     </span>
-                    <span style={{ fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B", marginTop: 2 }}>
+                    <span style={{ fontSize: 12.8, lineHeight: "20px", color: "var(--text-muted)", marginTop: 2 }}>
                       Receive notifications about AI generation progress
+                      {!pushSupported && " (not supported in this browser)"}
+                      {pushSupported && pushPermission === "denied" && " (blocked in browser settings)"}
                     </span>
                   </div>
                 </div>
@@ -801,10 +817,10 @@ export function SettingsModal({
                     <Checkbox checked={emailUpdates} onChange={handleEmailUpdatesChange} />
                   </div>
                   <div className="flex flex-col" style={{ marginLeft: 12 }}>
-                    <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5", paddingTop: 12 }}>
+                    <span style={{ fontSize: 13.7, lineHeight: "21px", color: "var(--text-primary)", paddingTop: 12 }}>
                       Email updates
                     </span>
-                    <span style={{ fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B", marginTop: 2 }}>
+                    <span style={{ fontSize: 12.8, lineHeight: "20px", color: "var(--text-muted)", marginTop: 2 }}>
                       Receive tips, feature updates, and special offers
                     </span>
                   </div>
@@ -818,10 +834,10 @@ export function SettingsModal({
             <div style={{ padding: "32px 48px 40px 50px" }}>
               {/* Page heading */}
               <div className="flex flex-col" style={{ gap: 5, marginBottom: 24 }}>
-                <span style={{ fontSize: 24, lineHeight: "36px", color: "#E5E5E5" }}>
+                <span style={{ fontSize: 24, lineHeight: "36px", color: "var(--text-primary)" }}>
                   Billing
                 </span>
-                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#A3A3A3" }}>
+                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "var(--text-muted)" }}>
                   Choose a plan that works for you
                 </span>
               </div>
@@ -940,19 +956,19 @@ export function SettingsModal({
 
                       {/* Plan name + price */}
                       <div className="flex items-baseline justify-between" style={{ marginBottom: 4 }}>
-                        <span style={{ fontSize: 16, fontWeight: 600, color: "#E5E5E5" }}>
+                        <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>
                           {plan.label}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1" style={{ marginBottom: 14 }}>
-                        <span style={{ fontSize: 28, fontWeight: 700, color: "#E5E5E5" }}>
+                        <span style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)" }}>
                           ${price}
                         </span>
-                        <span style={{ fontSize: 12, color: "#6B6B6B" }}>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
                           /mo
                         </span>
                         {billingCycle === "annual" && plan.monthlyPrice > 0 && (
-                          <span style={{ fontSize: 11, color: "#6B6B6B", textDecoration: "line-through", marginLeft: 6 }}>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "line-through", marginLeft: 6 }}>
                             ${plan.monthlyPrice}
                           </span>
                         )}
@@ -962,12 +978,12 @@ export function SettingsModal({
                       <div
                         style={{
                           padding: "8px 12px",
-                          background: "#1A1A1A",
+                          background: "var(--input-bg)",
                           borderRadius: 6,
                           marginBottom: 12,
                         }}
                       >
-                        <span style={{ fontSize: 12, color: "#A3A3A3" }}>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
                           {plan.generationLimit >= 500
                             ? "Unlimited*"
                             : `${plan.generationLimit}`}{" "}
@@ -980,7 +996,7 @@ export function SettingsModal({
                         {plan.features.slice(1, 5).map((f, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <CircleCheckIcon />
-                            <span style={{ fontSize: 11.5, lineHeight: "16px", color: "#A3A3A3" }}>
+                            <span style={{ fontSize: 11.5, lineHeight: "16px", color: "var(--text-muted)" }}>
                               {f}
                             </span>
                           </div>
@@ -1039,16 +1055,16 @@ export function SettingsModal({
                 style={{
                   marginTop: 20,
                   padding: "18px 20px",
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
+                  background: "var(--card-bg-secondary)",
+                  border: "1px solid var(--border-strong)",
                   borderRadius: 12,
                 }}
               >
                 <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-                  <span style={{ fontSize: 13.7, fontWeight: 500, color: "#E5E5E5" }}>
+                  <span style={{ fontSize: 13.7, fontWeight: 500, color: "var(--text-primary)" }}>
                     Generation Usage
                   </span>
-                  <span style={{ fontSize: 12, color: "#6B6B6B" }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
                     {generationsUsed} / {PLAN_CONFIGS_LOCAL[currentPlan].generationLimit >= 500 ? "\u221E" : PLAN_CONFIGS_LOCAL[currentPlan].generationLimit}
                   </span>
                 </div>
@@ -1056,7 +1072,7 @@ export function SettingsModal({
                 <div
                   style={{
                     height: 6,
-                    background: "#1A1A1A",
+                    background: "var(--input-bg)",
                     borderRadius: 3,
                     overflow: "hidden",
                   }}
@@ -1080,10 +1096,10 @@ export function SettingsModal({
             <div style={{ padding: "32px 48px 40px 50px" }}>
               {/* Page heading */}
               <div className="flex flex-col" style={{ gap: 5, marginBottom: 24 }}>
-                <span style={{ fontSize: 24, lineHeight: "36px", color: "#E5E5E5" }}>
+                <span style={{ fontSize: 24, lineHeight: "36px", color: "var(--text-primary)" }}>
                   Danger Zone
                 </span>
-                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#A3A3A3" }}>
+                <span style={{ fontSize: 13.7, lineHeight: "21px", color: "var(--text-muted)" }}>
                   Irreversible and destructive actions
                 </span>
               </div>
@@ -1091,8 +1107,8 @@ export function SettingsModal({
               {/* Delete Account card */}
               <div
                 style={{
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
+                  background: "var(--card-bg-secondary)",
+                  border: "1px solid var(--border-strong)",
                   borderRadius: 12,
                   padding: 25,
                 }}
@@ -1130,13 +1146,13 @@ export function SettingsModal({
                   </div>
 
                   {/* Description */}
-                  <span style={{ fontSize: 13.6, lineHeight: "22px", color: "#E5E5E5" }}>
+                  <span style={{ fontSize: 13.6, lineHeight: "22px", color: "var(--text-primary)" }}>
                     Once you delete your account, there is no going back. This
                     will permanently delete:
                   </span>
 
                   {/* Bullet list */}
-                  <div style={{ fontSize: 13.6, lineHeight: "25px", color: "#A3A3A3" }}>
+                  <div style={{ fontSize: 13.6, lineHeight: "25px", color: "var(--text-muted)" }}>
                     • All your 3D models and projects
                     <br />
                     • Your account data and settings

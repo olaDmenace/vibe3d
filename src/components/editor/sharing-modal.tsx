@@ -114,14 +114,14 @@ export function SharingModal({ open, onClose, projectId }: SharingModalProps) {
         style={{
           width: 460,
           maxHeight: "80vh",
-          background: "#1E1E1E",
-          border: "1px solid #3A3A3A",
+          background: "var(--card-bg)",
+          border: "1px solid var(--border-strong)",
           borderRadius: 16,
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #2A2A2A" }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: "#E5E5E5" }}>Share Project</span>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>Share Project</span>
           <button
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/5"
@@ -186,7 +186,7 @@ export function SharingModal({ open, onClose, projectId }: SharingModalProps) {
                   <div
                     key={share.id}
                     className="flex items-center gap-3 rounded-lg px-3 py-2"
-                    style={{ background: "#252525" }}
+                    style={{ background: "var(--card-bg-secondary)" }}
                   >
                     {/* Avatar */}
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#ff9a76] to-[#b57edc]">

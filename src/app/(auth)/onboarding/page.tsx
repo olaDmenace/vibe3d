@@ -120,15 +120,15 @@ export default function OnboardingPage() {
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#101010]">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[rgba(222,220,209,0.3)] border-t-[#faf9f5]" />
+      <div className="flex h-screen items-center justify-center bg-[var(--page-bg)]">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[#faf9f5]" />
       </div>
     );
   }
 
   return (
     <div
-      className="flex h-screen bg-[#101010]"
+      className="flex h-screen bg-[var(--page-bg)]"
       style={{ fontFamily: "'Aeonik Pro', sans-serif" }}
     >
       {/* Left — Onboarding form */}
@@ -197,7 +197,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Right — Editor preview mockup */}
-      <div className="relative m-6 ml-0 hidden flex-1 overflow-hidden rounded-[20px] border border-[rgba(222,220,209,0.15)] bg-[#262624] backdrop-blur-[16px] lg:block">
+      <div className="relative m-6 ml-0 hidden flex-1 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--card-bg-secondary)] backdrop-blur-[16px] lg:block">
         {/* Subtle background glow layers */}
         <div className="absolute -left-[200px] -top-[100px] h-[800px] w-[900px] opacity-20" style={{ mixBlendMode: "plus-lighter" }}>
           <div className="absolute inset-0 rounded-full bg-[#507AEF] blur-[120px]" />
@@ -207,7 +207,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Editor mockup frame */}
-        <div className="absolute inset-[60px_50px_120px_50px] rounded-[18px] bg-[#262624] shadow-[0_0_0_1px_rgba(255,255,255,0.1)]">
+        <div className="absolute inset-[60px_50px_120px_50px] rounded-[18px] bg-[var(--card-bg-secondary)] shadow-[0_0_0_1px_rgba(255,255,255,0.1)]">
           {/* Mockup top bar */}
           <div className="flex h-8 items-center gap-2 rounded-t-[18px] border-b border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] px-4">
             <div className="flex gap-1.5">
@@ -222,14 +222,14 @@ export default function OnboardingPage() {
           <div className="absolute bottom-0 left-0 top-8 w-[140px] border-r border-[rgba(255,255,255,0.05)] bg-[#1f1f18]">
             <div className="p-3">
               <div className="text-[9px] text-[rgba(255,255,255,0.5)]">Scenes</div>
-              <div className="mt-2 rounded bg-[rgba(255,255,255,0.05)] px-2 py-1 text-[9px] text-[rgba(255,255,255,0.7)]">Scene 1</div>
+              <div className="mt-2 rounded bg-[var(--accent-bg)] px-2 py-1 text-[9px] text-[rgba(255,255,255,0.7)]">Scene 1</div>
               <div className="mt-3 rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[8px] text-[rgba(255,255,255,0.3)]">Search</div>
               <div className="mt-3 text-[9px] text-[rgba(255,255,255,0.7)]">Digital Camera</div>
             </div>
           </div>
 
           {/* Mockup viewport with 3D camera */}
-          <div className="absolute bottom-0 left-[140px] right-[140px] top-8 bg-[#262624]">
+          <div className="absolute bottom-0 left-[140px] right-[140px] top-8 bg-[var(--card-bg-secondary)]">
             <div className="relative flex h-full items-center justify-center">
               <Image
                 src="/assets/images/editor-preview-camera.png"
@@ -296,7 +296,7 @@ function NameStep({
   return (
     <>
       <h1
-        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        className="text-[37.5px] leading-[37px] text-[var(--heading)]"
         style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
       >
         Welcome to Vibe3D
@@ -315,12 +315,12 @@ function NameStep({
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="John Doe"
-          className="mt-3.5 h-[60px] w-full max-w-[452px] rounded-[9px] border border-[rgba(222,220,209,0.3)] bg-transparent px-6 text-[14.8px] text-[#e5e5e5] placeholder:text-[#e5e5e5]/50 outline-none transition-colors focus:border-[rgba(222,220,209,0.5)]"
+          className="mt-3.5 h-[60px] w-full max-w-[452px] rounded-[9px] border border-[var(--border-strong)] bg-transparent px-6 text-[14.8px] text-[var(--text-primary)] placeholder:text-[var(--text-primary)]/50 outline-none transition-colors focus:border-[var(--text-muted)]"
         />
         <button
           type="submit"
           disabled={!displayName.trim()}
-          className="mt-7 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+          className="mt-7 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[var(--text-primary)] text-base text-[var(--page-bg)] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
         >
           Get Started
         </button>
@@ -342,7 +342,7 @@ function ReferralStep({
   return (
     <>
       <h1
-        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        className="text-[37.5px] leading-[37px] text-[var(--heading)]"
         style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
       >
         How did you hear
@@ -360,8 +360,8 @@ function ReferralStep({
             onClick={() => onToggle(src.id)}
             className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
               selected.has(src.id)
-                ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
-                : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
+                ? "border-[var(--text-muted)] bg-[var(--accent-bg)]"
+                : "border-[var(--border-strong)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
             }`}
           >
             {selected.has(src.id) && (
@@ -384,7 +384,7 @@ function ReferralStep({
               height={22}
               className="relative z-10 shrink-0 opacity-70"
             />
-            <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
+            <span className="relative z-10 text-[14px] leading-tight text-[var(--text-primary)]">
               {src.label}
             </span>
           </button>
@@ -393,7 +393,7 @@ function ReferralStep({
 
       <button
         onClick={onContinue}
-        className="mt-8 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3]"
+        className="mt-8 flex h-[44px] w-[139px] items-center justify-center rounded-[9px] bg-[var(--text-primary)] text-base text-[var(--page-bg)] transition-colors hover:bg-[#e8e7e3]"
       >
         Continue
       </button>
@@ -416,7 +416,7 @@ function UseCaseStep({
   return (
     <>
       <h1
-        className="text-[37.5px] leading-[37px] text-[#c2c0b6]"
+        className="text-[37.5px] leading-[37px] text-[var(--heading)]"
         style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
       >
         What&apos;s your primary
@@ -434,8 +434,8 @@ function UseCaseStep({
             onClick={() => onToggle(uc.id)}
             className={`group relative flex h-[52px] items-center gap-2.5 rounded-[9px] border px-4 transition-all ${
               selected.has(uc.id)
-                ? "border-[rgba(222,220,209,0.5)] bg-[rgba(255,255,255,0.05)]"
-                : "border-[rgba(222,220,209,0.3)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
+                ? "border-[var(--text-muted)] bg-[var(--accent-bg)]"
+                : "border-[var(--border-strong)] hover:border-[rgba(222,220,209,0.45)] hover:bg-[rgba(255,255,255,0.02)]"
             }`}
           >
             {selected.has(uc.id) && (
@@ -458,7 +458,7 @@ function UseCaseStep({
               height={22}
               className="relative z-10 shrink-0 opacity-70"
             />
-            <span className="relative z-10 text-[14px] leading-tight text-[#e5e5e5]">
+            <span className="relative z-10 text-[14px] leading-tight text-[var(--text-primary)]">
               {uc.label}
             </span>
           </button>
@@ -468,7 +468,7 @@ function UseCaseStep({
       <button
         onClick={onFinish}
         disabled={loading}
-        className="mt-8 flex h-[44px] w-[151px] items-center justify-center rounded-[9px] bg-[#faf9f5] text-base font-medium text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+        className="mt-8 flex h-[44px] w-[151px] items-center justify-center rounded-[9px] bg-[var(--text-primary)] text-base font-medium text-[var(--page-bg)] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
       >
         {loading ? "Loading..." : "Get Started"}
       </button>

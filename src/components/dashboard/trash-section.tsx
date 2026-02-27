@@ -73,16 +73,16 @@ export function TrashSection({ open, onClose }: TrashSectionProps) {
         style={{
           width: 560,
           maxHeight: "80vh",
-          background: "#1E1E1E",
-          border: "1px solid #3A3A3A",
+          background: "var(--card-bg)",
+          border: "1px solid var(--border-strong)",
           borderRadius: 16,
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #2A2A2A" }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
           <div className="flex items-center gap-2">
             <Trash2 size={16} className="text-white/50" />
-            <span style={{ fontSize: 16, fontWeight: 600, color: "#E5E5E5" }}>Trash</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>Trash</span>
           </div>
           <button
             onClick={onClose}
@@ -119,10 +119,10 @@ export function TrashSection({ open, onClose }: TrashSectionProps) {
                 <div
                   key={project.id}
                   className="flex items-center gap-3 rounded-lg px-3 py-3"
-                  style={{ background: "#252525", border: "1px solid #2A2A2A" }}
+                  style={{ background: "var(--card-bg-secondary)", border: "1px solid var(--border-subtle)" }}
                 >
                   {/* Thumbnail */}
-                  <div className="h-[36px] w-[54px] shrink-0 overflow-hidden rounded-md bg-[#1E1E1E]">
+                  <div className="h-[36px] w-[54px] shrink-0 overflow-hidden rounded-md bg-[var(--card-bg)]">
                     {project.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={project.thumbnail_url} alt="" className="h-full w-full object-cover" />

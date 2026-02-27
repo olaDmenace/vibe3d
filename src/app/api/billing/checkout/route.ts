@@ -35,6 +35,14 @@ export async function POST(request: Request) {
   try {
     const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    // Whop requires HTTPS redirect URLs — use direct checkout link for non-HTTPS origins
+    if (!origin.startsWith("https://")) {
+      return NextResponse.json({
+        checkoutUrl: `https://whop.com/checkout/${planId}`,
+        direct: true,
+      });
+    }
+
     const checkoutConfig = await whop.checkoutConfigurations.create({
       plan_id: planId,
       metadata: {

@@ -177,11 +177,11 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#262624]"
+      className="min-h-screen bg-[var(--page-bg)]"
       style={{ fontFamily: "'Aeonik Pro', sans-serif" }}
     >
       {/* ============ Top-left logo bar (with view toggle inside) ============ */}
-      <div className="fixed left-4 top-[19px] z-10 flex h-[62px] w-[230px] items-center justify-between rounded-[20px] border border-[rgba(222,220,209,0.15)] bg-[#1F1F18] backdrop-blur-[16px]">
+      <div className="fixed left-4 top-[19px] z-10 flex h-[62px] w-[230px] items-center justify-between rounded-[20px] border border-[var(--border)] bg-[var(--card-bg)] backdrop-blur-[16px]">
         {/* Logo */}
         <Image
           src="/assets/icons/logo-gem.svg"
@@ -211,16 +211,16 @@ export default function DashboardPage() {
               width: viewMode === "list" ? 39.11 : 25.54,
               height: 25.54,
               borderRadius: viewMode === "list" ? 15.16 : 6.38,
-              background: viewMode === "list" ? "rgba(255, 255, 255, 0.08)" : "transparent",
+              background: viewMode === "list" ? "var(--accent-bg)" : "transparent",
               boxShadow: viewMode === "list"
                 ? "0px 1.04px 4.15px rgba(0,0,0,0.1), inset 0px 0.52px 0px rgba(255,255,255,0.1)"
                 : "none",
             }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 4H13" stroke={viewMode === "list" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M3 8H13" stroke={viewMode === "list" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M3 12H13" stroke={viewMode === "list" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M3 4H13" stroke={viewMode === "list" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M3 8H13" stroke={viewMode === "list" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M3 12H13" stroke={viewMode === "list" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
           {/* Grid view button — active gets wider pill (39.11), inactive stays compact (25.54) */}
@@ -231,17 +231,17 @@ export default function DashboardPage() {
               width: viewMode === "grid" ? 39.11 : 25.54,
               height: 25.54,
               borderRadius: viewMode === "grid" ? 15.16 : 6.38,
-              background: viewMode === "grid" ? "rgba(255, 255, 255, 0.08)" : "transparent",
+              background: viewMode === "grid" ? "var(--accent-bg)" : "transparent",
               boxShadow: viewMode === "grid"
                 ? "0px 1.04px 4.15px rgba(0,0,0,0.1), inset 0px 0.52px 0px rgba(255,255,255,0.1)"
                 : "none",
             }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="2" y="2" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.3" />
-              <rect x="9" y="2" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.3" />
-              <rect x="2" y="9" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.3" />
-              <rect x="9" y="9" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "#FFFFFF" : "rgba(255,255,255,0.35)"} strokeWidth="1.3" />
+              <rect x="2" y="2" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.3" />
+              <rect x="9" y="2" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.3" />
+              <rect x="2" y="9" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.3" />
+              <rect x="9" y="9" width="5" height="5" rx="1" stroke={viewMode === "grid" ? "var(--text-primary)" : "var(--text-dim)"} strokeWidth="1.3" />
             </svg>
           </button>
         </div>
@@ -256,8 +256,8 @@ export default function DashboardPage() {
           style={{
             width: 230,
             height: 62,
-            background: "#1F1F18",
-            border: "1px solid rgba(222, 220, 209, 0.15)",
+            background: "var(--card-bg)",
+            border: "1px solid var(--border)",
             backdropFilter: "blur(16px)",
             borderRadius: 20,
           }}
@@ -297,7 +297,7 @@ export default function DashboardPage() {
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#ff9a76] to-[#b57edc]">
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#FFFFFF", fontFamily: "'Aeonik Pro', sans-serif" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", fontFamily: "'Aeonik Pro', sans-serif" }}>
                     {getInitials(userName)}
                   </span>
                 </div>
@@ -314,7 +314,7 @@ export default function DashboardPage() {
               fontFamily: "'Aeonik Pro', sans-serif",
               fontSize: 14,
               lineHeight: "20px",
-              color: "#FFFFFF",
+              color: "var(--text-primary)",
             }}
           >
             {userName}
@@ -329,7 +329,7 @@ export default function DashboardPage() {
               fontFamily: "'Aeonik Pro', sans-serif",
               fontSize: 12,
               lineHeight: "16px",
-              color: "#FFFFFF",
+              color: "var(--text-primary)",
             }}
           >
             {userPlan} plan
@@ -343,13 +343,13 @@ export default function DashboardPage() {
             className={`absolute transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
             style={{ left: 197, top: "calc(50% - 7px)" }}
           >
-            <path d="M4.5 6L8 10L11.5 6" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4.5 6L8 10L11.5 6" stroke="var(--text-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
 
         {/* Profile dropdown menu */}
         {profileOpen && (
-          <div className="absolute right-0 top-[72px] w-[230px] overflow-hidden rounded-[20px] border border-[rgba(222,220,209,0.15)] bg-[#1F1F18]">
+          <div className="absolute right-0 top-[72px] w-[230px] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--card-bg)]">
             {/* Settings button */}
             <div className="p-[13px] pb-0">
               <button
@@ -357,28 +357,28 @@ export default function DashboardPage() {
                   setSettingsOpen(true);
                   setProfileOpen(false);
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[rgba(255,255,255,0.08)] px-4 py-[8px] shadow-[0px_2px_8px_rgba(0,0,0,0.1),inset_0px_1px_0px_rgba(255,255,255,0.1)] transition-colors hover:bg-[rgba(255,255,255,0.12)]"
+                className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--accent-bg)] px-4 py-[8px] shadow-[0px_2px_8px_rgba(0,0,0,0.1),inset_0px_1px_0px_rgba(255,255,255,0.1)] transition-colors hover:bg-[var(--accent-bg-hover)]"
               >
-                <Settings size={16} className="text-[rgba(255,255,255,0.7)]" />
-                <span className="text-[11px] leading-[12.65px] text-[rgba(255,255,255,0.7)]">Settings</span>
+                <Settings size={16} className="text-[var(--text-secondary)]" />
+                <span className="text-[11px] leading-[12.65px] text-[var(--text-secondary)]">Settings</span>
               </button>
             </div>
 
             {/* Email + workspace section */}
             <div className="px-[7px] pt-[12px]">
-              <p className="px-[8px] pb-[8px] text-[11px] leading-[12.65px] text-[rgba(255,255,255,0.52)]">
+              <p className="px-[8px] pb-[8px] text-[11px] leading-[12.65px] text-[var(--text-muted)]">
                 {userEmail}
               </p>
               {/* Workspace row */}
-              <button className="flex w-full items-center gap-3 rounded-[8px] px-[7px] py-[8px] transition-colors hover:bg-[rgba(255,255,255,0.05)]">
-                <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[#121316]">
+              <button className="flex w-full items-center gap-3 rounded-[8px] px-[7px] py-[8px] transition-colors hover:bg-[var(--input-bg)]">
+                <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[var(--card-bg)]">
                   <div className="h-[24px] w-[24px] rounded-full bg-gradient-to-br from-[#ff9a76] to-[#b57edc]" />
                 </div>
-                <span className="flex-1 text-left text-[12px] leading-[16px] text-[rgba(255,255,255,0.7)]">
+                <span className="flex-1 text-left text-[12px] leading-[16px] text-[var(--text-secondary)]">
                   {userName}&apos;s Workspace
                 </span>
                 {/* Checkmark */}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[rgba(255,255,255,0.7)]">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[var(--text-secondary)]">
                   <path d="M3.5 8.5L6.5 11.5L12.5 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
@@ -386,40 +386,40 @@ export default function DashboardPage() {
 
             {/* Create workspace */}
             <div className="px-[7px]">
-              <button className="flex w-full items-center gap-2 rounded-[8px] px-[7px] py-[8px] transition-colors hover:bg-[rgba(255,255,255,0.05)]">
+              <button className="flex w-full items-center gap-2 rounded-[8px] px-[7px] py-[8px] transition-colors hover:bg-[var(--input-bg)]">
                 <div className="flex h-[24px] w-[24px] items-center justify-center">
-                  <Plus size={16} className="text-[rgba(255,255,255,0.7)]" />
+                  <Plus size={16} className="text-[var(--text-secondary)]" />
                 </div>
-                <span className="text-[12px] leading-[16px] text-[rgba(255,255,255,0.7)]">Create Workspace</span>
+                <span className="text-[12px] leading-[16px] text-[var(--text-secondary)]">Create Workspace</span>
               </button>
             </div>
 
             {/* Separator */}
-            <div className="mx-[7px] my-[4px] h-px bg-[rgba(255,255,255,0.05)]" />
+            <div className="mx-[7px] my-[4px] h-px bg-[var(--input-bg)]" />
 
             {/* Theme */}
             <div className="px-[7px]">
-              <button className="flex w-full items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] transition-colors hover:bg-[rgba(255,255,255,0.05)]">
+              <button className="flex w-full items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] transition-colors hover:bg-[var(--input-bg)]">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="3" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" />
-                  <path d="M8 2V3M8 13V14M2 8H3M13 8H14M3.76 3.76L4.47 4.47M11.53 11.53L12.24 12.24M12.24 3.76L11.53 4.47M4.47 11.53L3.76 12.24" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round" />
+                  <circle cx="8" cy="8" r="3" stroke="var(--text-secondary)" strokeWidth="1.3" />
+                  <path d="M8 2V3M8 13V14M2 8H3M13 8H14M3.76 3.76L4.47 4.47M11.53 11.53L12.24 12.24M12.24 3.76L11.53 4.47M4.47 11.53L3.76 12.24" stroke="var(--text-secondary)" strokeWidth="1.3" strokeLinecap="round" />
                 </svg>
-                <span className="flex-1 text-left text-[11px] leading-[12.65px] text-[rgba(255,255,255,0.7)]">Theme</span>
-                <ChevronRight size={16} className="text-[rgba(255,255,255,0.4)]" />
+                <span className="flex-1 text-left text-[11px] leading-[12.65px] text-[var(--text-secondary)]">Theme</span>
+                <ChevronRight size={16} className="text-[var(--text-dim)]" />
               </button>
             </div>
 
             {/* Separator */}
-            <div className="mx-[7px] my-[4px] h-px bg-[rgba(255,255,255,0.05)]" />
+            <div className="mx-[7px] my-[4px] h-px bg-[var(--input-bg)]" />
 
             {/* Logout */}
             <div className="px-[7px] pb-[7px]">
               <button
                 onClick={signOut}
-                className="flex w-full items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] transition-colors hover:bg-[rgba(255,255,255,0.05)]"
+                className="flex w-full items-center gap-[10px] rounded-[8px] px-[10px] py-[8px] transition-colors hover:bg-[var(--input-bg)]"
               >
-                <LogOut size={16} className="text-[rgba(255,255,255,0.7)]" />
-                <span className="text-[11px] leading-[12.65px] text-[rgba(255,255,255,0.7)]">Logout</span>
+                <LogOut size={16} className="text-[var(--text-secondary)]" />
+                <span className="text-[11px] leading-[12.65px] text-[var(--text-secondary)]">Logout</span>
               </button>
             </div>
           </div>
@@ -440,7 +440,7 @@ export default function DashboardPage() {
               className="shrink-0 drop-shadow-[0_0_12px_rgba(255,200,180,0.3)]"
             />
             <h1
-              className="text-[37.5px] leading-[59px] text-[#C2C0B6]"
+              className="text-[37.5px] leading-[59px] text-[var(--heading)]"
               style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
             >
               What would you like to create?
@@ -450,7 +450,7 @@ export default function DashboardPage() {
           {/* AI prompt input box */}
           <form
             onSubmit={handlePromptSubmit}
-            className="relative w-[626px] overflow-hidden rounded-[20px] bg-[#30302E] shadow-[0px_4px_20px_rgba(0,0,0,0.035),0px_0px_0px_0.5px_rgba(222,220,209,0.15)]"
+            className="relative w-[626px] overflow-hidden rounded-[20px] bg-[var(--card-bg-secondary)] shadow-[0px_4px_20px_rgba(0,0,0,0.035),0px_0px_0px_0.5px_rgba(222,220,209,0.15)]"
             style={{ height: 145 }}
           >
             {/* Gradient glow — inlined SVG from Figma export (inline SVG needed
@@ -505,7 +505,7 @@ export default function DashboardPage() {
 
             {/* Inner textarea container — Figma: left:2, top:3, 622×108 */}
             <div
-              className="absolute flex flex-col rounded-[18px] bg-[#3E3E3E]"
+              className="absolute flex flex-col rounded-[18px] bg-[var(--input-bg)]"
               style={{
                 left: 2,
                 top: 2,
@@ -534,7 +534,7 @@ export default function DashboardPage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Describe what you want to create in 3D..."
-                  className="h-full w-full resize-none bg-transparent text-[11px] leading-[16px] tracking-[0.3px] text-white/90 placeholder:text-white/40 outline-none"
+                  className="h-full w-full resize-none bg-transparent text-[11px] leading-[16px] tracking-[0.3px] text-[var(--text-primary)]/90 placeholder:text-[var(--text-primary)]/40 outline-none"
                   style={{
                     fontFamily: "'Spline Sans', sans-serif",
                     paddingLeft: prompt.length === 0 ? 6 : 0,
@@ -569,13 +569,13 @@ export default function DashboardPage() {
             >
               <Image src="/assets/icons/dashboard-sparkle.svg" alt="" width={17} height={17} style={{ opacity: 0.5 }} />
               <span
-                className="text-[11px] tracking-[0.3px] text-[rgba(255,255,255,0.95)]"
+                className="text-[11px] tracking-[0.3px] text-[var(--text-primary)]"
                 style={{ fontFamily: "'Spline Sans', sans-serif" }}
               >
                 NanoBanana
               </span>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
-                <path d="M5 6.5L8 9.5L11 6.5" stroke="rgba(255,255,255,0.95)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5 6.5L8 9.5L11 6.5" stroke="var(--text-primary)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </form>
@@ -588,10 +588,10 @@ export default function DashboardPage() {
                 onClick={() => {
                   setPrompt(s);
                 }}
-                className="flex items-center gap-1.5 rounded-[6.5px] border-[0.81px] border-[rgba(222,220,209,0.15)] bg-[#262624] px-2.5 py-1 transition-colors hover:border-[rgba(222,220,209,0.3)] hover:bg-[#30302e]"
+                className="flex items-center gap-1.5 rounded-[6.5px] border-[0.81px] border-[var(--border)] bg-[var(--page-bg)] px-2.5 py-1 transition-colors hover:border-[rgba(222,220,209,0.3)] hover:bg-[var(--card-bg-secondary)]"
               >
                 <Image src="/assets/icons/dashboard-stars.svg" alt="" width={16} height={16} className="shrink-0" />
-                <span className="text-[11.4px] leading-[16px] text-[#C2C0B6]">{s}</span>
+                <span className="text-[11.4px] leading-[16px] text-[var(--heading)]">{s}</span>
               </button>
             ))}
           </div>
@@ -601,31 +601,31 @@ export default function DashboardPage() {
         <div className="flex w-full flex-col gap-[18px]">
           {/* Search + filters row */}
           <div className="flex items-center justify-between">
-            <div className="relative flex h-8 w-[502px] items-center rounded-lg bg-[rgba(255,255,255,0.05)]">
-              <Search size={16} className="ml-3 opacity-60 text-white" />
+            <div className="relative flex h-8 w-[502px] items-center rounded-lg bg-[var(--input-bg)]">
+              <Search size={16} className="ml-3 opacity-60 text-[var(--text-primary)]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search"
-                className="h-full flex-1 bg-transparent px-2 text-[11px] text-white placeholder:text-[rgba(255,255,255,0.52)] outline-none"
+                className="h-full flex-1 bg-transparent px-2 text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
                 style={{ fontFamily: "'Aeonik Pro', sans-serif" }}
               />
             </div>
             <div className="flex items-center gap-2.5">
-              <button className="flex h-6 items-center rounded-[6.5px] border border-[rgba(222,220,209,0.15)] bg-[#262624] px-3 text-[10.8px] tracking-[0.055px] text-white">
+              <button className="flex h-6 items-center rounded-[6.5px] border border-[var(--border)] bg-[var(--page-bg)] px-3 text-[10.8px] tracking-[0.055px] text-[var(--text-primary)]">
                 Recently viewed
               </button>
               <button
                 onClick={() => setTrashOpen(true)}
-                className="flex h-6 items-center gap-1 rounded-[6.5px] border border-[rgba(222,220,209,0.15)] bg-[#262624] px-3 text-[10.8px] tracking-[0.055px] text-white/60 transition-colors hover:text-white/80"
+                className="flex h-6 items-center gap-1 rounded-[6.5px] border border-[var(--border)] bg-[var(--page-bg)] px-3 text-[10.8px] tracking-[0.055px] text-[var(--text-primary)]/60 transition-colors hover:text-[var(--text-primary)]/80"
               >
                 <Trash2 size={11} />
                 Trash
               </button>
-              <div className="flex h-6 items-center gap-1 rounded-[5px] bg-[rgba(255,255,255,0.05)] px-2">
-                <span className="text-[10.8px] tracking-[0.055px] text-white">Last viewed</span>
-                <ChevronDown size={12} className="text-[rgba(255,255,255,0.5)]" />
+              <div className="flex h-6 items-center gap-1 rounded-[5px] bg-[var(--input-bg)] px-2">
+                <span className="text-[10.8px] tracking-[0.055px] text-[var(--text-primary)]">Last viewed</span>
+                <ChevronDown size={12} className="text-[var(--text-muted)]" />
               </div>
             </div>
           </div>
@@ -636,13 +636,13 @@ export default function DashboardPage() {
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[rgba(222,220,209,0.3)] border-t-[#faf9f5]" />
             </div>
           ) : filteredProjects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 rounded-[13px] border border-dashed border-[#444] py-24">
+            <div className="flex flex-col items-center justify-center gap-4 rounded-[13px] border border-dashed border-[var(--border-strong)] py-24">
               <Image src="/assets/icons/dashboard-3d-view.svg" alt="" width={48} height={48} className="opacity-30" />
-              <p className="text-sm text-[rgba(255,255,255,0.5)]">
+              <p className="text-sm text-[var(--text-muted)]">
                 {searchQuery ? "No matching projects" : "No projects yet"}
               </p>
               {!searchQuery && (
-                <p className="text-xs text-[rgba(255,255,255,0.3)]">
+                <p className="text-xs text-[var(--text-dim)]">
                   Use the prompt above to create your first 3D model
                 </p>
               )}
@@ -654,10 +654,10 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/editor/${project.id}`)}
-                  className="group cursor-pointer overflow-hidden rounded-[13px] border border-[#444444] transition-colors hover:border-[#555]"
+                  className="group cursor-pointer overflow-hidden rounded-[13px] border border-[var(--border-strong)] transition-colors hover:border-[var(--border-strong)]"
                 >
                   {/* Thumbnail */}
-                  <div className="relative bg-[#1E1E1E]" style={{ height: "calc(257.11px - 59px)" }}>
+                  <div className="relative bg-[var(--card-bg)]" style={{ height: "calc(257.11px - 59px)" }}>
                     {project.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -669,13 +669,13 @@ export default function DashboardPage() {
                     {/* Delete button — appears on hover */}
                     <button
                       onClick={(e) => deleteProject(project.id, e)}
-                      className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-[5px] border border-[#444] bg-[#2C2C2C] text-[rgba(255,255,255,0.5)] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                      className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-[5px] border border-[var(--border-strong)] bg-[var(--card-bg-secondary)] text-[var(--text-muted)] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
                   {/* Footer — 59px tall */}
-                  <div className="flex h-[59px] items-center gap-3 border-t border-[#444444] bg-[#2C2C2C] px-[17px]">
+                  <div className="flex h-[59px] items-center gap-3 border-t border-[var(--border-strong)] bg-[var(--card-bg-secondary)] px-[17px]">
                     <Image
                       src="/assets/icons/dashboard-3d-view.svg"
                       alt=""
@@ -684,10 +684,10 @@ export default function DashboardPage() {
                       className="shrink-0 opacity-70"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10.8px] tracking-[0.055px] text-[#FFFFFF]">
+                      <p className="truncate text-[10.8px] tracking-[0.055px] text-[var(--text-primary)]">
                         {project.name}
                       </p>
-                      <p className="text-[10.8px] tracking-[0.055px] text-[rgba(255,255,255,0.7)]">
+                      <p className="text-[10.8px] tracking-[0.055px] text-[var(--text-secondary)]">
                         {formatTimeAgo(project.updated_at!)}
                       </p>
                     </div>
@@ -702,10 +702,10 @@ export default function DashboardPage() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/editor/${project.id}`)}
-                  className="group flex h-[60px] cursor-pointer items-center gap-4 rounded-[13px] border border-[#444444] bg-[#2C2C2C] px-4 transition-colors hover:border-[#555]"
+                  className="group flex h-[60px] cursor-pointer items-center gap-4 rounded-[13px] border border-[var(--border-strong)] bg-[var(--card-bg-secondary)] px-4 transition-colors hover:border-[var(--border-strong)]"
                 >
                   {/* Thumbnail */}
-                  <div className="h-[42px] w-[64px] shrink-0 overflow-hidden rounded-[6px] bg-[#1E1E1E]">
+                  <div className="h-[42px] w-[64px] shrink-0 overflow-hidden rounded-[6px] bg-[var(--card-bg)]">
                     {project.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -725,18 +725,18 @@ export default function DashboardPage() {
                   />
                   {/* Name */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[10.8px] tracking-[0.055px] text-[#FFFFFF]">
+                    <p className="truncate text-[10.8px] tracking-[0.055px] text-[var(--text-primary)]">
                       {project.name}
                     </p>
                   </div>
                   {/* Time */}
-                  <p className="shrink-0 text-[10.8px] tracking-[0.055px] text-[rgba(255,255,255,0.7)]">
+                  <p className="shrink-0 text-[10.8px] tracking-[0.055px] text-[var(--text-secondary)]">
                     {formatTimeAgo(project.updated_at!)}
                   </p>
                   {/* Delete button — appears on hover */}
                   <button
                     onClick={(e) => deleteProject(project.id, e)}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-[#444] bg-[#2C2C2C] text-[rgba(255,255,255,0.5)] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-[var(--border-strong)] bg-[var(--card-bg-secondary)] text-[var(--text-muted)] opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -751,17 +751,17 @@ export default function DashboardPage() {
               <button
                 onClick={() => loadProjects(pagination.page - 1)}
                 disabled={pagination.page <= 1}
-                className="flex h-8 items-center rounded-[8px] border border-[rgba(222,220,209,0.15)] bg-[#2C2C2C] px-3 text-[11px] text-white/70 transition-colors hover:bg-[#333] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex h-8 items-center rounded-[8px] border border-[var(--border)] bg-[var(--card-bg-secondary)] px-3 text-[11px] text-[var(--text-primary)]/70 transition-colors hover:bg-[var(--accent-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
-              <span className="text-[11px] text-white/50">
+              <span className="text-[11px] text-[var(--text-primary)]/50">
                 Page {pagination.page} of {pagination.pages}
               </span>
               <button
                 onClick={() => loadProjects(pagination.page + 1)}
                 disabled={pagination.page >= pagination.pages}
-                className="flex h-8 items-center rounded-[8px] border border-[rgba(222,220,209,0.15)] bg-[#2C2C2C] px-3 text-[11px] text-white/70 transition-colors hover:bg-[#333] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex h-8 items-center rounded-[8px] border border-[var(--border)] bg-[var(--card-bg-secondary)] px-3 text-[11px] text-[var(--text-primary)]/70 transition-colors hover:bg-[var(--accent-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Next
               </button>

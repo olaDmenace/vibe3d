@@ -114,7 +114,7 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex h-screen bg-[#101010]" style={{ fontFamily: "'Aeonik Pro', sans-serif" }}>
+    <div className="flex h-screen bg-[var(--page-bg)]" style={{ fontFamily: "'Aeonik Pro', sans-serif" }}>
       {/* Left — Auth form */}
       <div className="relative flex w-full max-w-[540px] flex-col justify-between px-[68px] py-12">
         {/* Logo + form */}
@@ -132,7 +132,7 @@ export default function SignInPage() {
 
           {/* Title */}
           <h1
-            className="text-center text-4xl text-[#c2c0b6]"
+            className="text-center text-4xl text-[var(--heading)]"
             style={{ fontFamily: "'PP Mondwest', Georgia, serif" }}
           >
             Vibe3D
@@ -144,7 +144,7 @@ export default function SignInPage() {
           </p>
 
           {/* Auth card */}
-          <div className="mt-8 w-full max-w-[400px] rounded-[18px] border border-[rgba(222,220,209,0.15)] bg-[#141413] p-7 shadow-[0px_4px_24px_0px_rgba(0,0,0,0.02),0px_4px_32px_0px_rgba(0,0,0,0.02)]">
+          <div className="mt-8 w-full max-w-[400px] rounded-[18px] border border-[var(--border)] bg-[var(--card-bg)] p-7 shadow-[0px_4px_24px_0px_rgba(0,0,0,0.02),0px_4px_32px_0px_rgba(0,0,0,0.02)]">
             {step === "email" ? (
               <>
                 {/* Google button */}
@@ -159,14 +159,14 @@ export default function SignInPage() {
                     width={16}
                     height={15}
                   />
-                  <span className="text-base text-[#faf9f5]">
+                  <span className="text-base text-[var(--text-primary)]">
                     Continue with Google
                   </span>
                 </button>
 
                 {/* Divider */}
                 <div className="my-4 flex items-center justify-center">
-                  <span className="text-xs tracking-wider text-[#c2c0b6] uppercase">
+                  <span className="text-xs tracking-wider text-[var(--heading)] uppercase">
                     or
                   </span>
                 </div>
@@ -179,12 +179,12 @@ export default function SignInPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     disabled={loading}
-                    className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-base text-[#faf9f5] placeholder:text-[#9c9a92] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
+                    className="h-11 w-full rounded-[9px] border border-[var(--border)] bg-[var(--input-bg)] px-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
                   />
                   <button
                     type="submit"
                     disabled={loading || !email.trim()}
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[var(--text-primary)] text-base text-[var(--page-bg)] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
                   >
                     {loading ? "Sending..." : "Continue with email"}
                   </button>
@@ -204,12 +204,12 @@ export default function SignInPage() {
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                     placeholder="8-digit code"
                     disabled={loading}
-                    className="h-11 w-full rounded-[9px] border border-[rgba(222,220,209,0.15)] bg-[#30302e] px-3 text-center text-xl tracking-[0.3em] text-[#faf9f5] placeholder:text-[#9c9a92] placeholder:tracking-normal placeholder:text-base outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
+                    className="h-11 w-full rounded-[9px] border border-[var(--border)] bg-[var(--input-bg)] px-3 text-center text-xl tracking-[0.3em] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:tracking-normal placeholder:text-base outline-none transition-colors focus:border-[rgba(222,220,209,0.4)] disabled:opacity-50"
                   />
                   <button
                     type="submit"
                     disabled={loading || otpCode.length < 8}
-                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[#faf9f5] text-base text-[#30302e] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
+                    className="flex h-11 w-full items-center justify-center rounded-[9px] bg-[var(--text-primary)] text-base text-[var(--page-bg)] transition-colors hover:bg-[#e8e7e3] disabled:opacity-50"
                   >
                     {loading ? "Verifying..." : "Verify code"}
                   </button>
@@ -218,7 +218,7 @@ export default function SignInPage() {
                 {/* Back link */}
                 <button
                   onClick={handleBackToEmail}
-                  className="mt-3 w-full text-center text-sm text-[#9c9a92] transition-colors hover:text-[#c2c0b6]"
+                  className="mt-3 w-full text-center text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--heading)]"
                 >
                   Use a different email
                 </button>
@@ -237,7 +237,7 @@ export default function SignInPage() {
             )}
 
             {/* Privacy */}
-            <p className="mt-5 text-center text-xs text-[#9c9a92]">
+            <p className="mt-5 text-center text-xs text-[var(--text-muted)]">
               By continuing, you acknowledge Vibe3D&apos;s{" "}
               <Link href="#" className="underline">
                 Privacy Policy
@@ -271,7 +271,7 @@ export default function SignInPage() {
       </div>
 
       {/* Right — Hero image */}
-      <div className="relative hidden flex-1 overflow-hidden rounded-[20px] border border-[rgba(222,220,209,0.15)] bg-[#1f1f18] backdrop-blur-[16px] lg:block m-6 ml-0">
+      <div className="relative hidden flex-1 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--card-bg)] backdrop-blur-[16px] lg:block m-6 ml-0">
         <Image
           src="/assets/images/hero-3d-model.png"
           alt="3D model showcase"
@@ -283,7 +283,7 @@ export default function SignInPage() {
         <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-[rgba(16,16,16,0.9)] to-transparent" />
         {/* Bottom text */}
         <div className="absolute bottom-12 left-12 max-w-xs">
-          <p className="text-lg leading-8 text-white">
+          <p className="text-lg leading-8 text-[var(--text-primary)]">
             Create stunning 3D models with AI. No modeling experience required.
           </p>
         </div>

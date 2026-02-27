@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useEditorStore } from "@/store/editor-store";
 import { createClient } from "@/lib/supabase/client";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import type { EditorAction } from "@/types/actions";
 
 interface ChatMessage {
@@ -36,6 +37,7 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
 
   const dispatch = useEditorStore((s) => s.dispatch);
   const supabase = createClient();
+  const { notify } = usePushNotifications();
 
   // Load conversation history on mount
   useEffect(() => {
@@ -119,6 +121,12 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
                   timestamp: new Date().toISOString(),
                 },
               ]);
+
+              // Browser push notification
+              notify(`3D model ready`, {
+                body: `"${prompt}" has been generated and added to your scene.`,
+                tag: `generation-${taskId}`,
+              });
             }
           }
         } catch {
@@ -126,7 +134,7 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
         }
       }, 3000);
     },
-    [projectId, dispatch]
+    [projectId, dispatch, notify]
   );
 
   const handleImageUpload = useCallback(async (file: File) => {
