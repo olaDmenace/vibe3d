@@ -6,7 +6,7 @@ import {
   apiError,
 } from "@/lib/api/validation";
 
-// GET /api/projects/[id] — get project with its scene
+// GET /api/projects/[id] — get project with its scene (owner or shared user)
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,10 +25,25 @@ export async function GET(
     .from("projects")
     .select("*")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (projectError || !project) {
     return apiError("Project not found", 404, "NOT_FOUND");
+  }
+
+  // Check access: owner or shared collaborator
+  if (project.owner_id !== user.id) {
+    const { data: share } = await supabase
+      .from("project_shares")
+      .select("id")
+      .eq("project_id", id)
+      .eq("shared_with_id", user.id)
+      .maybeSingle();
+
+    if (!share) {
+      return apiError("Project not found", 404, "NOT_FOUND");
+    }
   }
 
   const { data: scene, error: sceneError } = await supabase
@@ -84,7 +99,7 @@ export async function PUT(
   return NextResponse.json(data);
 }
 
-// DELETE /api/projects/[id] — delete project
+// DELETE /api/projects/[id] — soft-delete project (sets deleted_at)
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -101,9 +116,10 @@ export async function DELETE(
 
   const { error } = await supabase
     .from("projects")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .is("deleted_at", null);
 
   if (error) {
     return apiError(error.message, 500, "DB_ERROR");

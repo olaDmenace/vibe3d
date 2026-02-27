@@ -105,3 +105,25 @@ export const generateSchema = z.object({
 export const updateSceneSchema = z.object({
   scene_graph: z.record(z.string(), z.unknown()),
 });
+
+/* ------------------------------------------------------------------ */
+/*  Pagination schemas                                                 */
+/* ------------------------------------------------------------------ */
+
+export const paginationSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+/* ------------------------------------------------------------------ */
+/*  Share schemas                                                      */
+/* ------------------------------------------------------------------ */
+
+export const createShareSchema = z.object({
+  email: z.string().email(),
+  permission: z.enum(["view", "edit", "admin"]).default("view"),
+});
+
+export const updateShareSchema = z.object({
+  permission: z.enum(["view", "edit", "admin"]),
+});

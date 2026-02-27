@@ -11,6 +11,13 @@ import type { Tables } from "@/types/database";
 type Project = Tables<"projects">;
 type ViewMode = "grid" | "list";
 
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -37,6 +44,7 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, pages: 0 });
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -84,12 +92,13 @@ export default function DashboardPage() {
     }
   }, [profileOpen]);
 
-  async function loadProjects() {
+  async function loadProjects(page = 1) {
     setLoading(true);
-    const res = await fetch("/api/projects");
+    const res = await fetch(`/api/projects?page=${page}&limit=20`);
     if (res.ok) {
-      const data = await res.json();
-      setProjects(data);
+      const json = await res.json();
+      setProjects(json.data);
+      setPagination(json.pagination);
     }
     setLoading(false);
   }
@@ -110,9 +119,10 @@ export default function DashboardPage() {
 
   async function deleteProject(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm("Delete this project? This cannot be undone.")) return;
+    if (!confirm("Move this project to trash?")) return;
     await fetch(`/api/projects/${id}`, { method: "DELETE" });
     setProjects((prev) => prev.filter((p) => p.id !== id));
+    setPagination((prev) => ({ ...prev, total: prev.total - 1 }));
   }
 
   async function signOut() {
@@ -703,6 +713,29 @@ export default function DashboardPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Pagination controls */}
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-4">
+              <button
+                onClick={() => loadProjects(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+                className="flex h-8 items-center rounded-[8px] border border-[rgba(222,220,209,0.15)] bg-[#2C2C2C] px-3 text-[11px] text-white/70 transition-colors hover:bg-[#333] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-[11px] text-white/50">
+                Page {pagination.page} of {pagination.pages}
+              </span>
+              <button
+                onClick={() => loadProjects(pagination.page + 1)}
+                disabled={pagination.page >= pagination.pages}
+                className="flex h-8 items-center rounded-[8px] border border-[rgba(222,220,209,0.15)] bg-[#2C2C2C] px-3 text-[11px] text-white/70 transition-colors hover:bg-[#333] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
             </div>
           )}
         </div>

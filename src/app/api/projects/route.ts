@@ -5,6 +5,7 @@ import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
 import {
   validateBody,
   createProjectSchema,
+  paginationSchema,
   apiError,
 } from "@/lib/api/validation";
 
@@ -38,8 +39,8 @@ const DEFAULT_SCENE_STATE: SceneState = {
   },
 };
 
-// GET /api/projects — list user's projects
-export async function GET() {
+// GET /api/projects — list user's projects (paginated, excludes soft-deleted)
+export async function GET(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,17 +50,65 @@ export async function GET() {
     return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
+  // Parse pagination from query string
+  const url = new URL(request.url);
+  const parsed = paginationSchema.safeParse({
+    page: url.searchParams.get("page") ?? undefined,
+    limit: url.searchParams.get("limit") ?? undefined,
+  });
+  const { page, limit } = parsed.success
+    ? parsed.data
+    : { page: 1, limit: 20 };
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  // Count total non-deleted projects for pagination metadata
+  const { count } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .is("deleted_at", null);
+
+  // Fetch paginated slice
   const { data, error } = await supabase
     .from("projects")
     .select("*")
     .eq("owner_id", user.id)
-    .order("updated_at", { ascending: false });
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .range(from, to);
 
   if (error) {
     return apiError(error.message, 500, "DB_ERROR");
   }
 
-  return NextResponse.json(data);
+  const total = count ?? 0;
+
+  // Also fetch projects shared with this user (not paginated — typically few)
+  const { data: sharedEntries } = await supabase
+    .from("project_shares")
+    .select("project_id, permission, projects:project_id(*)")
+    .eq("shared_with_id", user.id);
+
+  const sharedProjects = (sharedEntries ?? [])
+    .map((entry) => {
+      const project = entry.projects as unknown as Record<string, unknown> | null;
+      if (!project || project.deleted_at) return null;
+      return { ...project, _shared: true, _permission: entry.permission };
+    })
+    .filter(Boolean);
+
+  return NextResponse.json({
+    data: data ?? [],
+    shared: sharedProjects,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+    },
+  });
 }
 
 // POST /api/projects — create a new project (+ default scene)
@@ -89,11 +138,12 @@ export async function POST(request: Request) {
   const planConfig = PLAN_CONFIGS[plan];
 
   if (planConfig.projectLimit !== null) {
-    // Count existing projects
+    // Count existing non-deleted projects
     const { count } = await supabase
       .from("projects")
       .select("id", { count: "exact", head: true })
-      .eq("owner_id", user.id);
+      .eq("owner_id", user.id)
+      .is("deleted_at", null);
 
     if (count !== null && count >= planConfig.projectLimit) {
       return apiError(

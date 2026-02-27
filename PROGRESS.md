@@ -93,19 +93,32 @@ Phase 3 — AI Chat & Generation + Billing Plans
 - [x] Dashboard plan display fixed: shows actual plan from profiles table instead of hardcoded "Max plan" — 2026-02-27
 - [x] Left sidebar plan display fixed: loads plan from profiles table instead of user_metadata — 2026-02-27
 
+### Phase 5 — Polish & Scale
+- [x] Pagination on GET /api/projects: `?page=&limit=` with `{ data, shared, pagination }` response — 2026-02-27
+- [x] Soft deletes: `deleted_at` column on projects, DELETE sets timestamp instead of hard delete — 2026-02-27
+- [x] Sharing API: POST/GET /api/projects/[id]/shares — add collaborator by email, list collaborators with profiles — 2026-02-27
+- [x] Sharing API: PUT/DELETE /api/projects/[id]/shares/[shareId] — update permission, remove collaborator — 2026-02-27
+- [x] `get_user_id_by_email` RPC function (SECURITY DEFINER) for user lookup in sharing flow — 2026-02-27
+- [x] Shared projects returned in GET /api/projects response (`shared` array) — 2026-02-27
+- [x] GET /api/projects/[id] allows access for shared collaborators (not just owner) — 2026-02-27
+- [x] RLS policies: owners can INSERT/UPDATE/DELETE shares, editors can manage shared scenes — 2026-02-27
+- [x] Database migrations tracked in `supabase/migrations/` (3 migration files) — 2026-02-27
+- [x] Dashboard pagination UI: Previous/Next buttons with page indicator — 2026-02-27
+- [x] Dashboard soft delete: "Move to trash?" confirmation, project removed from UI — 2026-02-27
+- [x] TypeScript types updated: `deleted_at` added to projects in `database.ts` — 2026-02-27
+- [x] Google OAuth confirmed configured on Supabase Dashboard — 2026-02-27
+
 ## In Progress
 - (none)
 
 ## Blocked / Deferred
 - shadcn/ui not yet installed — using plain Tailwind for now.
-- Google OAuth provider not yet configured in Supabase Dashboard — needs Google Cloud Console client ID/secret.
 - Stripe/Paddle payment integration — plan switching is frontend-only, no real payment processing yet.
 - Non-primitive model export — GLB export currently builds primitives only; loaded GLB models are skipped (need to be fetched from URL first).
 - FBX/OBJ/STL export formats — only GLB is supported currently.
 - Watermark injection for Free tier — metadata flag is set but no visual watermark in exported file.
-- Pagination on GET /api/projects — returns all projects, needs ?page=&limit= for scale.
-- Soft deletes — projects are permanently deleted, no deleted_at column.
-- Database migrations not in codebase — schema changes done via Supabase Dashboard.
+- Sharing UI on dashboard — API is wired but no frontend for inviting/viewing collaborators yet.
+- Trash/restore UI — soft delete is in place but no way to view or restore trashed projects from the dashboard.
 
 ## Decisions & Notes
 - Used Lucide React icons for editor toolbar since Figma MCP was initially rate-limited. Icons are centralized for easy swap.
@@ -125,8 +138,12 @@ Phase 3 — AI Chat & Generation + Billing Plans
 - GLB export builds a Three.js scene from store data (no Canvas/R3F context needed), exports via GLTFExporter, and disposes resources after.
 - Asset uploads validated for MIME type + extension fallback + 50MB size limit. Storage path: `{userId}/{projectId}/{assetId}.{ext}`.
 - Free tier enforced at project creation time by checking `profiles.plan` + counting existing projects vs `PLAN_CONFIGS.projectLimit`.
+- Soft deletes: DELETE /api/projects/[id] sets `deleted_at` timestamp instead of removing the row. All list/get queries filter `WHERE deleted_at IS NULL`.
+- Free tier project count excludes soft-deleted projects (they don't count against the limit).
+- Sharing uses `get_user_id_by_email` RPC (SECURITY DEFINER) to look up users by email without exposing `auth.users`.
+- Database migrations tracked in `supabase/migrations/` — 3 files covering soft deletes, sharing RLS, and user lookup RPC.
+- Pagination defaults: page=1, limit=20, max limit=100. Response includes `{ data, shared, pagination: { page, limit, total, pages } }`.
 
 ## Known Issues
 - THREE.js warnings in console: "THREE.Clock: This module has been deprecated" and "PCFSoftShadowMap has been removed" — cosmetic, from drei/three version mismatch.
-- Google OAuth will fail until the provider is configured in the Supabase Dashboard with a Google Cloud Console OAuth client ID/secret.
 - Pre-existing lint errors in `transform-gizmo.tsx` — refs accessed during render (React 19 strict mode warning).
