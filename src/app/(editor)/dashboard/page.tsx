@@ -11,6 +11,13 @@ import type { Tables } from "@/types/database";
 type Project = Tables<"projects">;
 type ViewMode = "grid" | "list";
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
 const SUGGESTIONS = [
   "Create a futuristic sport car",
   "Create a modern building",
@@ -25,6 +32,8 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState("Free");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -43,6 +52,18 @@ export default function DashboardPage() {
       if (user) {
         setUserName(user.user_metadata?.display_name || user.email?.split("@")[0] || "User");
         setUserEmail(user.email || "");
+        // Load avatar + plan from profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+        const profilePlan = (profile as Record<string, unknown> | null)?.plan as string | undefined;
+        if (profilePlan) {
+          const labels: Record<string, string> = { free: "Free", standard: "Standard", pro: "Pro", mega: "Mega" };
+          setUserPlan(labels[profilePlan] ?? "Free");
+        }
       }
       loadProjects();
     };
@@ -229,16 +250,27 @@ export default function DashboardPage() {
               border: "1px solid rgba(255, 255, 255, 0.1)",
             }}
           >
-            {/* Inner image circle */}
+            {/* Inner circle — avatar image or initials */}
             <div
-              className="absolute rounded-full bg-gradient-to-br from-[#ff9a76] to-[#b57edc]"
+              className="absolute overflow-hidden rounded-full"
               style={{
                 width: 31,
                 height: 31,
                 left: "calc(50% - 31px/2 + 0.5px)",
                 top: "calc(50% - 31px/2 + 0.5px)",
               }}
-            />
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#ff9a76] to-[#b57edc]">
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#FFFFFF", fontFamily: "'Aeonik Pro', sans-serif" }}>
+                    {getInitials(userName)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
           {/* Name */}
           <span
@@ -268,7 +300,7 @@ export default function DashboardPage() {
               color: "#FFFFFF",
             }}
           >
-            Max plan
+            {userPlan} plan
           </span>
           {/* Chevron — down arrow matching Figma vector */}
           <svg
@@ -682,6 +714,10 @@ export default function DashboardPage() {
         onClose={() => setSettingsOpen(false)}
         userName={userName}
         userEmail={userEmail}
+        avatarUrl={avatarUrl}
+        onNameChange={(newName) => setUserName(newName)}
+        onAvatarChange={(newUrl) => setAvatarUrl(newUrl)}
+        onAccountDeleted={() => router.replace("/sign-in")}
       />
     </div>
   );

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { SceneState } from "@/types/scene";
+import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
+import {
+  validateBody,
+  createProjectSchema,
+  apiError,
+} from "@/lib/api/validation";
 
 const DEFAULT_SCENE_STATE: SceneState = {
   version: 1,
@@ -40,7 +46,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
   const { data, error } = await supabase
@@ -50,7 +56,7 @@ export async function GET() {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error.message, 500, "DB_ERROR");
   }
 
   return NextResponse.json(data);
@@ -64,11 +70,45 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
-  const body = await request.json().catch(() => ({}));
-  const name = body.name || "Untitled Project";
+  // Validate request body
+  const result = await validateBody(request, createProjectSchema);
+  if ("error" in result) return result.error;
+  const { name } = result.data;
+
+  // ---- Free tier project limit enforcement ----
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  const plan = ((profile as Record<string, unknown> | null)?.plan as PlanTier) ?? "free";
+  const planConfig = PLAN_CONFIGS[plan];
+
+  if (planConfig.projectLimit !== null) {
+    // Count existing projects
+    const { count } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id);
+
+    if (count !== null && count >= planConfig.projectLimit) {
+      return apiError(
+        `Project limit reached. ${planConfig.label} plan allows ${planConfig.projectLimit} project${planConfig.projectLimit > 1 ? "s" : ""}. Upgrade your plan for more.`,
+        403,
+        "PROJECT_LIMIT",
+        {
+          limit: planConfig.projectLimit,
+          current: count,
+          plan,
+          upgrade: true,
+        }
+      );
+    }
+  }
 
   // Create the project
   const { data: project, error: projectError } = await supabase
@@ -78,9 +118,10 @@ export async function POST(request: Request) {
     .single();
 
   if (projectError || !project) {
-    return NextResponse.json(
-      { error: projectError?.message ?? "Failed to create project" },
-      { status: 500 }
+    return apiError(
+      projectError?.message ?? "Failed to create project",
+      500,
+      "DB_ERROR"
     );
   }
 
@@ -97,7 +138,7 @@ export async function POST(request: Request) {
   if (sceneError) {
     // Clean up the project if scene creation fails
     await supabase.from("projects").delete().eq("id", project.id);
-    return NextResponse.json({ error: sceneError.message }, { status: 500 });
+    return apiError(sceneError.message, 500, "DB_ERROR");
   }
 
   return NextResponse.json({ project, scene }, { status: 201 });

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  validateBody,
+  updateProjectSchema,
+  apiError,
+} from "@/lib/api/validation";
 
 // GET /api/projects/[id] — get project with its scene
 export async function GET(
@@ -13,7 +18,7 @@ export async function GET(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
   const { data: project, error: projectError } = await supabase
@@ -23,7 +28,7 @@ export async function GET(
     .single();
 
   if (projectError || !project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return apiError("Project not found", 404, "NOT_FOUND");
   }
 
   const { data: scene, error: sceneError } = await supabase
@@ -35,7 +40,7 @@ export async function GET(
     .single();
 
   if (sceneError) {
-    return NextResponse.json({ error: sceneError.message }, { status: 500 });
+    return apiError(sceneError.message, 500, "DB_ERROR");
   }
 
   return NextResponse.json({ project, scene });
@@ -53,15 +58,16 @@ export async function PUT(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
-  const body = await request.json();
-  const updates: Record<string, unknown> = {};
-  if (body.name !== undefined) updates.name = body.name;
-  if (body.description !== undefined) updates.description = body.description;
-  if (body.is_public !== undefined) updates.is_public = body.is_public;
-  if (body.thumbnail_url !== undefined) updates.thumbnail_url = body.thumbnail_url;
+  const result = await validateBody(request, updateProjectSchema);
+  if ("error" in result) return result.error;
+
+  const updates = result.data;
+  if (Object.keys(updates).length === 0) {
+    return apiError("No fields to update", 400, "EMPTY_UPDATE");
+  }
 
   const { data, error } = await supabase
     .from("projects")
@@ -72,7 +78,7 @@ export async function PUT(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error.message, 500, "DB_ERROR");
   }
 
   return NextResponse.json(data);
@@ -90,7 +96,7 @@ export async function DELETE(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
   const { error } = await supabase
@@ -100,7 +106,7 @@ export async function DELETE(
     .eq("owner_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error.message, 500, "DB_ERROR");
   }
 
   return NextResponse.json({ success: true });

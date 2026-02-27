@@ -1,7 +1,7 @@
 # Progress Tracker
 
 ## Current Phase
-Phase 2 — Persistence & Auth
+Phase 3 — AI Chat & Generation + Billing Plans
 
 ## Completed
 
@@ -40,66 +40,93 @@ Phase 2 — Persistence & Auth
 - [x] RLS policies for all tables — 2026-02-25
 - [x] Auto-create profile trigger on auth.users insert — 2026-02-25
 - [x] Auto-update updated_at triggers on profiles, projects, scenes, ai_conversations — 2026-02-25
-- [x] Storage buckets: `assets` (private), `thumbnails` (public) with policies — 2026-02-25
+- [x] Storage buckets: `assets` (private), `thumbnails` (public), `avatars` (public) with policies — 2026-02-25
 - [x] Generated TypeScript database types (`src/types/database.ts`) — 2026-02-25
 - [x] Supabase client utilities: browser client, server client, middleware — 2026-02-25
 - [x] Next.js middleware for session refresh + route protection — 2026-02-25
 - [x] Auth: sign-in page with real Google OAuth + email magic link (OTP) — 2026-02-25
 - [x] OAuth callback route (`/auth/callback`) — 2026-02-25
-- [x] Dashboard page (`/dashboard`) — list projects, create, delete — 2026-02-25
+- [x] Dashboard page (`/dashboard`) — list projects, create, delete, avatar display — 2026-02-25
 - [x] API routes: GET/POST /api/projects, GET/PUT/DELETE /api/projects/[id] — 2026-02-25
 - [x] API route: PUT /api/projects/[id]/scene — save scene state — 2026-02-25
+- [x] API route: GET/PUT/DELETE /api/user — profile + preferences + account deletion — 2026-02-25
 - [x] Project editor page (`/editor/[id]`) — loads project from DB, hydrates store — 2026-02-25
 - [x] Auto-save: debounced 30s interval + save on tab blur + save on beforeunload (sendBeacon) — 2026-02-25
 - [x] Manual save: Ctrl+S keyboard shortcut + Save button in toolbar — 2026-02-25
 - [x] Project thumbnail capture hook (`use-thumbnail.ts`) — canvas → blob → Supabase Storage — 2026-02-25
 - [x] Toolbar shows project name + back-to-dashboard arrow for project editor — 2026-02-25
-
-### Onboarding Flow
-- [x] Onboarding page (`/onboarding`) — "What's your primary use case?" multi-select, Figma design match — 2026-02-25
-- [x] Downloaded 7 onboarding use case icons from Figma (`public/assets/icons/onboarding-*.svg`) — 2026-02-25
-- [x] Onboarding state stored in Supabase user_metadata (onboarding_completed, use_cases) — 2026-02-25
-- [x] Auth callback updated — redirects new users to /onboarding, returning users to /dashboard — 2026-02-25
-- [x] Editor guided tour component — 3-step tooltip walkthrough (3D Model, AI Assistant, Models List) — 2026-02-25
-- [x] Tour state persisted in localStorage (vibe3d_tour_completed) — 2026-02-25
-- [x] Middleware updated — standalone /editor allowed without auth — 2026-02-25
+- [x] Settings modal: Account (name edit, avatar upload), Preferences (theme, language, notifications), Billing, Danger Zone (account deletion) — 2026-02-27
+- [x] Avatar upload to Supabase Storage with initials fallback — 2026-02-27
+- [x] `delete_user_account()` RPC function for cascading account deletion — 2026-02-27
 
 ### Onboarding Flow
 - [x] Downloaded 7 use case icons from Figma (`public/assets/icons/onboarding-*.svg`) — 2026-02-25
-- [x] Onboarding page (`/onboarding`) — use case multi-select, gem logo, trust logos, editor preview panel — 2026-02-25
-- [x] Editor guided tour (`src/components/editor/tour/editor-tour.tsx`) — 3-step tooltip walkthrough (3D Model → AI Assistant → Models List) — 2026-02-25
-- [x] Auth callback updated — redirects new users to `/onboarding`, returning users to `/dashboard` — 2026-02-25
-- [x] Onboarding state stored in Supabase `user_metadata` (use_cases + onboarding_completed) — 2026-02-25
-- [x] Editor layout updated to include tour overlay — 2026-02-25
-- [x] Middleware updated — standalone `/editor` route now allowed for unauthenticated users — 2026-02-25
-- [x] Tour completion persisted in localStorage (`vibe3d_tour_completed`) — 2026-02-25
+- [x] Multi-step onboarding: name, referral source, use case selection — 2026-02-25
+- [x] Editor guided tour (`src/components/editor/tour/editor-tour.tsx`) — 3-step tooltip walkthrough — 2026-02-25
+- [x] Auth callback redirects new users to `/onboarding`, returning users to `/dashboard` — 2026-02-25
+- [x] Onboarding state stored in Supabase `user_metadata` — 2026-02-25
+
+### Phase 3 — AI Chat & Generation + Billing Plans
+- [x] Provider-agnostic AI types: ModelGenerationProvider, GenerationResult, TaskStatus, GenOptions (`src/lib/ai/types.ts`) — 2026-02-27
+- [x] MeshyProvider: text-to-3D, image-to-3D, status polling via Meshy API v2 (`src/lib/ai/meshy-provider.ts`) — 2026-02-27
+- [x] Generation service: provider registry, normalizePrompt, downloadModel (`src/lib/ai/generation-service.ts`) — 2026-02-27
+- [x] Chat service: Claude-powered scene manipulation returning EditorAction[], action validation (`src/lib/ai/chat-service.ts`) — 2026-02-27
+- [x] API route: POST/GET /api/projects/[id]/chat — send messages, load history, persist to ai_conversations — 2026-02-27
+- [x] API route: POST /api/projects/[id]/generate — text-to-3D with cache check, rate limiting, generation count — 2026-02-27
+- [x] API route: GET /api/projects/[id]/generate/[jobId] — poll status, auto-download + store completed models — 2026-02-27
+- [x] Billing plan configs: Free ($0/5 gens), Standard ($30/75), Pro ($60/175), Mega ($120/500) — 2026-02-27
+- [x] Billing columns added to profiles: plan, generation_limit, generations_used, billing_cycle_start — 2026-02-27
+- [x] Chat panel wired: send messages to Claude, dispatch EditorAction[], generation with progress polling — 2026-02-27
+- [x] Billing tab redesigned: 4 plan cards (2x2 grid), monthly/annual toggle, usage progress bar — 2026-02-27
+- [x] /api/user returns billing info (plan, generations_used, generation_limit) — 2026-02-27
+
+### Phase 4 — Asset Pipeline, Export, Free Tier, Validation
+- [x] Asset API: POST/GET /api/projects/[id]/assets — upload 3D models/textures with MIME validation, size limits (50MB) — 2026-02-27
+- [x] Asset API: GET/DELETE /api/projects/[id]/assets/[assetId] — get with signed URL, delete with storage cleanup — 2026-02-27
+- [x] Scene renderer updated: supports both primitives AND GLB model loading via `useGLTF` with Suspense fallback — 2026-02-27
+- [x] GLB Export: client-side export via Three.js GLTFExporter, builds scene from store data (no Canvas needed) — 2026-02-27
+- [x] Export button wired in right sidebar — downloads scene.glb — 2026-02-27
+- [x] Export API: POST /api/projects/[id]/export — returns scene data + asset URLs + watermark flag per plan — 2026-02-27
+- [x] Free tier project limit enforcement: POST /api/projects checks profiles.plan and rejects if limit reached — 2026-02-27
+- [x] Zod validation on all API routes: projects, user, chat, generate, scene, assets, export — 2026-02-27
+- [x] Standardized error responses: `{ error, code, details }` format via `apiError()` helper — 2026-02-27
+- [x] Dashboard plan display fixed: shows actual plan from profiles table instead of hardcoded "Max plan" — 2026-02-27
+- [x] Left sidebar plan display fixed: loads plan from profiles table instead of user_metadata — 2026-02-27
 
 ## In Progress
 - (none)
 
 ## Blocked / Deferred
-- shadcn/ui not yet installed — using plain Tailwind for now; will add shadcn/ui primitives when needed for dialogs, menus, dropdowns.
+- shadcn/ui not yet installed — using plain Tailwind for now.
 - Google OAuth provider not yet configured in Supabase Dashboard — needs Google Cloud Console client ID/secret.
-- Onboarding right panel uses sign-in hero image as placeholder — Figma editor preview mockup asset was too small (24×24). May need manual screenshot or higher-res export.
+- Stripe/Paddle payment integration — plan switching is frontend-only, no real payment processing yet.
+- Non-primitive model export — GLB export currently builds primitives only; loaded GLB models are skipped (need to be fetched from URL first).
+- FBX/OBJ/STL export formats — only GLB is supported currently.
+- Watermark injection for Free tier — metadata flag is set but no visual watermark in exported file.
+- Pagination on GET /api/projects — returns all projects, needs ?page=&limit= for scale.
+- Soft deletes — projects are permanently deleted, no deleted_at column.
+- Database migrations not in codebase — schema changes done via Supabase Dashboard.
 
 ## Decisions & Notes
 - Used Lucide React icons for editor toolbar since Figma MCP was initially rate-limited. Icons are centralized for easy swap.
-- Used dark theme color palette as CSS custom properties in `globals.css` (editor-bg, editor-surface, editor-border, editor-accent, etc.).
-- Figma design tokens extracted from updated Figma file (xVlyJE0J3QYgpXabNmJXfR): #09090b bg, #18181b surfaces, #6366f1 accent, #fafafa text, Inter font.
-- Sign-in page uses warm earth tones from Figma: #101010 bg, #141413 card, #c2c0b6 title, #faf9f5 button, rgba(222,220,209,0.15) borders.
-- Moved project from `app/` to `src/app/` to match PRD file structure; tsconfig path alias updated to `./src/*`.
-- Fixed structuredClone incompatibility with Immer draft proxies — snapshot is taken via `get()` before entering immer `set()` callback.
+- Used dark theme color palette as CSS custom properties in `globals.css`.
+- Sign-in page uses warm earth tones from Figma: #101010 bg, #141413 card, #c2c0b6 title, #faf9f5 button.
 - Supabase project ID: `ayhbxyyyzwutsjstradu`, region: `us-east-1`, org: `Kreos`.
-- Kept standalone `/editor` route (no auth required) for quick anonymous use alongside the authenticated `/editor/[id]` route.
 - Email auth uses magic link (OTP) rather than password — simpler UX, no password storage.
 - Auto-save uses `navigator.sendBeacon` on `beforeunload` for reliable save-on-close.
-- Thumbnail capture requires `preserveDrawingBuffer: true` on the R3F Canvas.
-- Onboarding flow: sign-in → `/onboarding` (use case selection) → `/dashboard` → editor with guided tour.
-- Onboarding completion stored in Supabase `user_metadata` via `supabase.auth.updateUser()` — no extra DB migration needed.
-- Editor tour state stored in localStorage — survives page reloads but not cross-device. Acceptable for a tour.
-- Onboarding page reuses sign-in page layout (2-panel: left form + right hero image) with warm earth tone design tokens.
-- Figma onboarding screens analyzed: nodes 1:4502 (default), 1:3550 (default duplicate), 1:3984 (selected state), 1:253 (tour step 1), 1:772 (tour step 2), 1:1291 (tour step 3), 1:1811 (tour step 3 duplicate).
+- AI chat uses Claude claude-sonnet-4-6 for scene manipulation. System prompt includes full scene context + EditorAction schema.
+- AI actions are validated before dispatch: object ID existence, numeric bounds, material value clamping.
+- Generation prompt normalization (lowercase + trim + collapse whitespace) enables exact-match caching via `assets.ai_prompt`.
+- Billing cycle reset is checked on each generation request (monthly rolling window).
+- Chat history is stored in `ai_conversations` table, trimmed to last 100 messages.
+- Generation requests that match a cached `ai_prompt` in the `assets` table skip the Meshy API call entirely.
+- Zod validation added to all API routes. Schemas centralized in `src/lib/api/validation.ts`.
+- All API errors use standardized `{ error, code, details }` format via `apiError()` helper.
+- GLB export builds a Three.js scene from store data (no Canvas/R3F context needed), exports via GLTFExporter, and disposes resources after.
+- Asset uploads validated for MIME type + extension fallback + 50MB size limit. Storage path: `{userId}/{projectId}/{assetId}.{ext}`.
+- Free tier enforced at project creation time by checking `profiles.plan` + counting existing projects vs `PLAN_CONFIGS.projectLimit`.
 
 ## Known Issues
 - THREE.js warnings in console: "THREE.Clock: This module has been deprecated" and "PCFSoftShadowMap has been removed" — cosmetic, from drei/three version mismatch.
 - Google OAuth will fail until the provider is configured in the Supabase Dashboard with a Google Cloud Console OAuth client ID/secret.
+- Pre-existing lint errors in `transform-gizmo.tsx` — refs accessed during render (React 19 strict mode warning).

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { validateBody, updateSceneSchema, apiError } from "@/lib/api/validation";
 
 // PUT /api/projects/[id]/scene — save scene state
 export async function PUT(
@@ -13,7 +14,7 @@ export async function PUT(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("Unauthorized", 401, "UNAUTHORIZED");
   }
 
   // Verify project ownership
@@ -25,18 +26,12 @@ export async function PUT(
     .single();
 
   if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return apiError("Project not found", 404, "NOT_FOUND");
   }
 
-  const body = await request.json();
-  const sceneGraph = body.scene_graph;
-
-  if (!sceneGraph) {
-    return NextResponse.json(
-      { error: "scene_graph is required" },
-      { status: 400 }
-    );
-  }
+  const result = await validateBody(request, updateSceneSchema);
+  if ("error" in result) return result.error;
+  const { scene_graph: sceneGraph } = result.data;
 
   // Upsert the scene (update existing or create if none)
   const { data: existingScene } = await supabase
@@ -59,7 +54,7 @@ export async function PUT(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return apiError(error.message, 500, "DB_ERROR");
     }
 
     // Also touch the project's updated_at
@@ -80,7 +75,7 @@ export async function PUT(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return apiError(error.message, 500, "DB_ERROR");
     }
 
     return NextResponse.json(data, { status: 201 });

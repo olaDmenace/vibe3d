@@ -1,17 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
+
+const PLAN_CONFIGS_LOCAL = PLAN_CONFIGS;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
+
+interface UserPreferences {
+  theme: "dark" | "light" | "auto";
+  language: string;
+  push_notifications: boolean;
+  email_updates: boolean;
+}
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   userName: string;
   userEmail: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
+  /** Called after display_name is successfully changed so parent can update. */
+  onNameChange?: (newName: string) => void;
+  /** Called after avatar is uploaded so parent can update. */
+  onAvatarChange?: (newUrl: string) => void;
+  /** Called after account is deleted so parent can redirect. */
+  onAccountDeleted?: () => void;
+}
+
+/** Extract up to 2 initials from a display name. */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 type SettingsTab =
@@ -30,9 +55,8 @@ const TABS: { id: SettingsTab; label: string }[] = [
 
 /** Ideal modal height per tab (capped by maxHeight: 90vh). Omit for auto. */
 const TAB_HEIGHTS: Partial<Record<SettingsTab, number>> = {
-  account: 382,
+  account: 280,
   preferences: 675,
-  billing: 1028,
 };
 
 /* ------------------------------------------------------------------ */
@@ -46,20 +70,6 @@ function CloseIcon() {
         d="M3 3L11 11M11 3L3 11"
         stroke="rgba(255,255,255,0.5)"
         strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <rect x="3" y="8" width="12" height="8.5" rx="2" stroke="#E5E5E5" strokeWidth="1.49" />
-      <path
-        d="M6 8V5.5C6 3.84 7.34 2.5 9 2.5C10.66 2.5 12 3.84 12 5.5V8"
-        stroke="#E5E5E5"
-        strokeWidth="1.49"
         strokeLinecap="round"
       />
     </svg>
@@ -105,6 +115,20 @@ function CircleCheckIcon() {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
+      <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+      <path
+        d="M12.5 7A5.5 5.5 0 0 0 7 1.5"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Checkbox                                                           */
 /* ------------------------------------------------------------------ */
@@ -144,80 +168,21 @@ function Checkbox({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Billing sub-components                                             */
+/*  Status toast                                                       */
 /* ------------------------------------------------------------------ */
 
-/** A single row in the billing history list. */
-function BillingHistoryRow({
-  date,
-  plan,
-  amount,
-}: {
-  date: string;
-  plan: string;
-  amount: string;
-}) {
+function StatusToast({ message, type }: { message: string; type: "success" | "error" }) {
   return (
     <div
-      className="relative"
+      className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg px-4 py-2"
       style={{
-        height: 72,
-        background: "#1A1A1A",
-        borderRadius: 8,
+        background: type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+        border: `1px solid ${type === "success" ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+        fontSize: 12,
+        color: type === "success" ? "#10B981" : "#EF4444",
       }}
     >
-      {/* Date */}
-      <span
-        className="absolute"
-        style={{ left: 16, top: 15.5, fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5" }}
-      >
-        {date}
-      </span>
-      {/* Plan */}
-      <span
-        className="absolute"
-        style={{ left: 16, top: 36.5, fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B" }}
-      >
-        {plan}
-      </span>
-      {/* Amount */}
-      <span
-        className="absolute"
-        style={{ left: 261.8, top: 23.75, fontSize: 15.5, lineHeight: "24px", color: "#E5E5E5" }}
-      >
-        {amount}
-      </span>
-      {/* Paid badge */}
-      <div
-        className="absolute flex items-center justify-center"
-        style={{
-          left: 332.38,
-          top: "calc(50% - 13px)",
-          width: 49.58,
-          height: 26,
-          background: "rgba(16, 185, 129, 0.125)",
-          borderRadius: 6,
-        }}
-      >
-        <span style={{ fontSize: 12, lineHeight: "18px", color: "#10B981" }}>Paid</span>
-      </div>
-      {/* Download button */}
-      <button
-        className="absolute flex items-center justify-center transition-opacity hover:opacity-80"
-        style={{
-          width: 86.05,
-          height: 33.5,
-          left: 397.95,
-          top: "calc(50% - 16.75px)",
-          border: "1px solid #3A3A3A",
-          borderRadius: 6,
-          fontSize: 12.9,
-          lineHeight: "20px",
-          color: "#A3A3A3",
-        }}
-      >
-        Download
-      </button>
+      {message}
     </div>
   );
 }
@@ -232,11 +197,201 @@ export function SettingsModal({
   userName,
   userEmail,
   avatarUrl,
+  onNameChange,
+  onAvatarChange,
+  onAccountDeleted,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Account editing states
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(userName);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Preferences state
   const [theme, setTheme] = useState<ThemeOption>("dark");
+  const [language, setLanguage] = useState("en");
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Billing state
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [currentPlan, setCurrentPlan] = useState<PlanTier>("free");
+  const [generationsUsed, setGenerationsUsed] = useState(0);
+
+  // UI states
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Sync input states when props change (e.g. after name update in parent)
+  useEffect(() => { setNameInput(userName); }, [userName]);
+
+  // Load preferences from backend on open
+  useEffect(() => {
+    if (!open || prefsLoaded) return;
+    fetch("/api/user")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.preferences) {
+          const p = data.preferences as UserPreferences;
+          setTheme(p.theme ?? "dark");
+          setLanguage(p.language ?? "en");
+          setPushNotifications(p.push_notifications ?? true);
+          setEmailUpdates(p.email_updates ?? false);
+        }
+        // Load billing info
+        if (data.plan) setCurrentPlan(data.plan as PlanTier);
+        if (typeof data.generations_used === "number") setGenerationsUsed(data.generations_used);
+        setPrefsLoaded(true);
+      })
+      .catch(() => setPrefsLoaded(true));
+  }, [open, prefsLoaded]);
+
+  // Reset states when modal closes
+  useEffect(() => {
+    if (!open) {
+      setEditingName(false);
+      setDeleteConfirm(false);
+      setToast(null);
+    }
+  }, [open]);
+
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // --- Handlers ---
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === userName) {
+      setEditingName(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/user", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      onNameChange?.(trimmed);
+      setEditingName(false);
+      showToast("Name updated", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Failed to update name", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("Image must be under 2MB", "error");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+
+      // Upload to storage (upsert to replace existing)
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(path);
+
+      // Append cache-buster so the browser loads the new image
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // Save URL to profile
+      const res = await fetch("/api/user", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: publicUrl }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+
+      onAvatarChange?.(publicUrl);
+      showToast("Avatar updated", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to upload avatar", "error");
+    } finally {
+      setUploadingAvatar(false);
+      // Reset file input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const savePreferences = useCallback(
+    async (prefs: UserPreferences) => {
+      try {
+        await fetch("/api/user", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preferences: prefs }),
+        });
+      } catch {
+        // Silently fail — preferences are still reflected in local state
+      }
+    },
+    []
+  );
+
+  const handleThemeChange = (t: ThemeOption) => {
+    setTheme(t);
+    savePreferences({ theme: t, language, push_notifications: pushNotifications, email_updates: emailUpdates });
+  };
+
+  const handlePushNotificationsChange = (v: boolean) => {
+    setPushNotifications(v);
+    savePreferences({ theme, language, push_notifications: v, email_updates: emailUpdates });
+  };
+
+  const handleEmailUpdatesChange = (v: boolean) => {
+    setEmailUpdates(v);
+    savePreferences({ theme, language, push_notifications: pushNotifications, email_updates: v });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/user", { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error);
+      // Sign out on client
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      onAccountDeleted?.();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Failed to delete account", "error");
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -315,7 +470,16 @@ export function SettingsModal({
         <div className="flex-1 overflow-y-auto">
           {/* ===== Account tab ===== */}
           {activeTab === "account" && (
-            <div className="relative" style={{ minHeight: 342 }}>
+            <div className="relative" style={{ minHeight: 240 }}>
+              {/* Hidden file input for avatar upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+
               {/* Profile row — avatar + name + email */}
               <div
                 className="absolute flex"
@@ -327,20 +491,42 @@ export function SettingsModal({
                   style={{ width: 120 }}
                 >
                   <div
-                    className="overflow-hidden rounded-full bg-gradient-to-br from-[#ff9a76] to-[#b57edc]"
+                    className="relative overflow-hidden rounded-full"
                     style={{ width: 120, height: 120 }}
                   >
-                    {avatarUrl && (
+                    {avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={avatarUrl}
                         alt=""
                         className="h-full w-full object-cover"
                       />
+                    ) : (
+                      <div
+                        className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#ff9a76] to-[#b57edc]"
+                      >
+                        <span
+                          style={{
+                            fontSize: 40,
+                            fontWeight: 600,
+                            color: "#FFFFFF",
+                            fontFamily: "'Aeonik Pro', sans-serif",
+                          }}
+                        >
+                          {getInitials(userName)}
+                        </span>
+                      </div>
+                    )}
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <SpinnerIcon />
+                      </div>
                     )}
                   </div>
                   <button
-                    className="flex items-center justify-center transition-opacity hover:opacity-80"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="flex items-center justify-center transition-opacity hover:opacity-80 disabled:opacity-50"
                     style={{
                       width: 36.4,
                       height: 24,
@@ -370,35 +556,75 @@ export function SettingsModal({
                   >
                     Name
                   </span>
-                  <div
-                    className="flex items-center"
-                    style={{
-                      height: 34,
-                      border: "1px solid rgba(222, 220, 209, 0.3)",
-                      borderRadius: 5,
-                      paddingLeft: 13,
-                      fontSize: 11,
-                      lineHeight: "16px",
-                      letterSpacing: "0.055px",
-                      color: "#FFFFFF",
-                    }}
-                  >
-                    {userName}
-                  </div>
-                  <button
-                    className="text-left transition-opacity hover:opacity-80"
-                    style={{
-                      fontSize: 10.8,
-                      lineHeight: "16px",
-                      letterSpacing: "0.055px",
-                      color: "#7CC4F8",
-                    }}
-                  >
-                    Change name
-                  </button>
+                  {editingName ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveName();
+                        if (e.key === "Escape") { setEditingName(false); setNameInput(userName); }
+                      }}
+                      className="bg-transparent outline-none"
+                      style={{
+                        height: 34,
+                        border: "1px solid #7CC4F8",
+                        borderRadius: 5,
+                        paddingLeft: 13,
+                        fontSize: 11,
+                        lineHeight: "16px",
+                        letterSpacing: "0.055px",
+                        color: "#FFFFFF",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center"
+                      style={{
+                        height: 34,
+                        border: "1px solid rgba(222, 220, 209, 0.3)",
+                        borderRadius: 5,
+                        paddingLeft: 13,
+                        fontSize: 11,
+                        lineHeight: "16px",
+                        letterSpacing: "0.055px",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      {userName}
+                    </div>
+                  )}
+                  {editingName ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveName}
+                        disabled={saving}
+                        className="flex items-center gap-1 text-left transition-opacity hover:opacity-80 disabled:opacity-50"
+                        style={{ fontSize: 10.8, lineHeight: "16px", letterSpacing: "0.055px", color: "#10B981" }}
+                      >
+                        {saving && <SpinnerIcon />} Save
+                      </button>
+                      <button
+                        onClick={() => { setEditingName(false); setNameInput(userName); }}
+                        className="text-left transition-opacity hover:opacity-80"
+                        style={{ fontSize: 10.8, lineHeight: "16px", letterSpacing: "0.055px", color: "#A3A3A3" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingName(true)}
+                      className="text-left transition-opacity hover:opacity-80"
+                      style={{ fontSize: 10.8, lineHeight: "16px", letterSpacing: "0.055px", color: "#7CC4F8" }}
+                    >
+                      Change name
+                    </button>
+                  )}
                 </div>
 
-                {/* Email field */}
+                {/* Email field (read-only) */}
                 <div className="flex flex-col" style={{ width: 145, gap: 11 }}>
                   <span
                     style={{
@@ -421,67 +647,12 @@ export function SettingsModal({
                       fontSize: 11,
                       lineHeight: "16px",
                       letterSpacing: "0.055px",
-                      color: "#FFFFFF",
+                      color: "rgba(255, 255, 255, 0.6)",
                     }}
                   >
                     {userEmail}
                   </div>
-                  <button
-                    className="text-left transition-opacity hover:opacity-80"
-                    style={{
-                      fontSize: 10.8,
-                      lineHeight: "16px",
-                      letterSpacing: "0.055px",
-                      color: "#7CC4F8",
-                    }}
-                  >
-                    Change email
-                  </button>
                 </div>
-              </div>
-
-              {/* Password section */}
-              <div
-                className="absolute"
-                style={{
-                  width: 548,
-                  height: 95,
-                  left: "calc(50% - 548px/2)",
-                  top: 212,
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
-                  borderRadius: 12,
-                }}
-              >
-                <span
-                  className="absolute"
-                  style={{ left: 25, top: 25, fontSize: 13.8, lineHeight: "21px", color: "#E5E5E5" }}
-                >
-                  Password
-                </span>
-                <span
-                  className="absolute"
-                  style={{ left: 25, top: 50, fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B" }}
-                >
-                  Last changed 3 months ago
-                </span>
-                <button
-                  className="absolute flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
-                  style={{
-                    width: 168.51,
-                    height: 38.51,
-                    left: 353.64,
-                    top: "calc(50% - 38.51px/2 + 1px)",
-                    background: "#1A1A1A",
-                    border: "0.9px solid #3A3A3A",
-                    borderRadius: 5.37,
-                  }}
-                >
-                  <LockIcon />
-                  <span style={{ fontSize: 12.27, lineHeight: "19px", color: "#E5E5E5" }}>
-                    Change Password
-                  </span>
-                </button>
               </div>
             </div>
           )}
@@ -536,7 +707,7 @@ export function SettingsModal({
                   {(["dark", "light", "auto"] as ThemeOption[]).map((opt) => (
                     <button
                       key={opt}
-                      onClick={() => setTheme(opt)}
+                      onClick={() => handleThemeChange(opt)}
                       className="flex flex-1 items-center justify-center capitalize transition-colors"
                       style={{
                         height: 47,
@@ -576,7 +747,7 @@ export function SettingsModal({
                   }}
                 >
                   <span style={{ fontSize: 13.7, lineHeight: "16px", color: "#E5E5E5" }}>
-                    English
+                    {language === "en" ? "English" : language}
                   </span>
                   <ChevronDownIcon />
                 </div>
@@ -608,7 +779,7 @@ export function SettingsModal({
                   style={{ left: 25, top: 62, right: 25, height: 66.5 }}
                 >
                   <div className="flex items-center" style={{ paddingLeft: 12, paddingTop: 12 }}>
-                    <Checkbox checked={pushNotifications} onChange={setPushNotifications} />
+                    <Checkbox checked={pushNotifications} onChange={handlePushNotificationsChange} />
                   </div>
                   <div className="flex flex-col" style={{ marginLeft: 12 }}>
                     <span style={{ fontSize: 13.6, lineHeight: "21px", color: "#E5E5E5", paddingTop: 12 }}>
@@ -626,7 +797,7 @@ export function SettingsModal({
                   style={{ left: 25, top: 136.5, right: 25, height: 66.5 }}
                 >
                   <div className="flex items-center" style={{ paddingLeft: 12, paddingTop: 12 }}>
-                    <Checkbox checked={emailUpdates} onChange={setEmailUpdates} />
+                    <Checkbox checked={emailUpdates} onChange={handleEmailUpdatesChange} />
                   </div>
                   <div className="flex flex-col" style={{ marginLeft: 12 }}>
                     <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5", paddingTop: 12 }}>
@@ -643,292 +814,240 @@ export function SettingsModal({
 
           {/* ===== Billing tab ===== */}
           {activeTab === "billing" && (
-            <div className="relative" style={{ minHeight: 988 }}>
+            <div style={{ padding: "32px 48px 40px 50px" }}>
               {/* Page heading */}
-              <div
-                className="absolute flex flex-col"
-                style={{ left: 50, top: 32, gap: 5 }}
-              >
+              <div className="flex flex-col" style={{ gap: 5, marginBottom: 24 }}>
                 <span style={{ fontSize: 24, lineHeight: "36px", color: "#E5E5E5" }}>
                   Billing
                 </span>
                 <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#A3A3A3" }}>
-                  Manage your subscription and payments
+                  Choose a plan that works for you
                 </span>
               </div>
 
-              {/* ---- Current Plan card ---- */}
-              <div
-                className="absolute"
-                style={{
-                  width: 549,
-                  height: 344,
-                  left: 48,
-                  top: 111,
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
-                  borderRadius: 12,
-                }}
-              >
-                {/* CURRENT PLAN badge */}
-                <div
-                  className="absolute flex items-center justify-center"
+              {/* Monthly / Annual toggle */}
+              <div className="flex items-center gap-3" style={{ marginBottom: 20 }}>
+                <button
+                  onClick={() => setBillingCycle("monthly")}
+                  className="flex items-center justify-center transition-colors"
                   style={{
-                    left: 26,
-                    top: 27,
-                    width: 109,
-                    height: 26,
-                    background: "rgba(255, 255, 255, 0.125)",
-                    borderRadius: 6,
+                    height: 32,
+                    padding: "0 14px",
+                    borderRadius: 7,
+                    fontSize: 12.8,
+                    lineHeight: "20px",
+                    background: billingCycle === "monthly" ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                    color: billingCycle === "monthly" ? "#FFFFFF" : "#6B6B6B",
+                    border: billingCycle === "monthly" ? "none" : "1px solid #3A3A3A",
                   }}
                 >
-                  <span style={{ fontSize: 12, lineHeight: "18px", color: "#FFFFFF" }}>
-                    CURRENT PLAN
-                  </span>
-                </div>
-
-                {/* Plan name */}
-                <span
-                  className="absolute"
-                  style={{ left: 26, top: 60.5, fontSize: 24, lineHeight: "36px", color: "#E5E5E5" }}
-                >
-                  Pro Plan
-                </span>
-
-                {/* Price */}
-                <span
-                  className="absolute text-right"
-                  style={{ right: 38.8, top: 26.75, fontSize: 32, lineHeight: "48px", color: "#E5E5E5" }}
-                >
-                  $29
-                </span>
-                <span
-                  className="absolute text-right"
-                  style={{ right: 38.8, top: 74.75, fontSize: 13.7, lineHeight: "21px", color: "#6B6B6B" }}
-                >
-                  per month
-                </span>
-
-                {/* Features box */}
-                <div
-                  className="absolute"
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setBillingCycle("annual")}
+                  className="flex items-center justify-center gap-2 transition-colors"
                   style={{
-                    left: 26,
-                    right: 24,
-                    top: 113,
-                    height: 138,
-                    background: "#1A1A1A",
-                    borderRadius: 8,
+                    height: 32,
+                    padding: "0 14px",
+                    borderRadius: 7,
+                    fontSize: 12.8,
+                    lineHeight: "20px",
+                    background: billingCycle === "annual" ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                    color: billingCycle === "annual" ? "#FFFFFF" : "#6B6B6B",
+                    border: billingCycle === "annual" ? "none" : "1px solid #3A3A3A",
                   }}
                 >
-                  {/* Includes label */}
+                  Annual
                   <span
-                    className="absolute"
-                    style={{ left: 16, top: 15.5, fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B" }}
-                  >
-                    Includes:
-                  </span>
-
-                  {/* Feature 1 */}
-                  <div
-                    className="absolute flex items-center gap-[24px]"
-                    style={{ left: 16, top: 53.5 }}
-                  >
-                    <CircleCheckIcon />
-                    <span style={{ fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5" }}>
-                      Unlimited AI generations
-                    </span>
-                  </div>
-
-                  {/* Feature 2 */}
-                  <div
-                    className="absolute flex items-center gap-[24px]"
-                    style={{ left: 16, top: 82.5 }}
-                  >
-                    <CircleCheckIcon />
-                    <span style={{ fontSize: 13.6, lineHeight: "21px", color: "#E5E5E5" }}>
-                      Export to all formats (GLB, FBX, OBJ)
-                    </span>
-                  </div>
-
-                  {/* Feature 3 */}
-                  <div
-                    className="absolute flex items-center gap-[24px]"
-                    style={{ left: 16, top: 111.5 }}
-                  >
-                    <CircleCheckIcon />
-                    <span style={{ fontSize: 13.6, lineHeight: "21px", color: "#E5E5E5" }}>
-                      Priority support
-                    </span>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <button
-                  className="absolute flex items-center justify-center transition-opacity hover:opacity-90"
-                  style={{
-                    left: 26,
-                    right: 123,
-                    top: 270,
-                    height: 47,
-                    background: "#FAF9F5",
-                    borderRadius: 9,
-                    fontSize: 13.7,
-                    lineHeight: "21px",
-                    color: "#000000",
-                  }}
-                >
-                  Upgrade to Annual (Save 20%)
-                </button>
-                <button
-                  className="absolute flex items-center justify-center transition-opacity hover:opacity-80"
-                  style={{
-                    width: 87.35,
-                    height: 47,
-                    left: 438,
-                    top: 270,
-                    border: "1px solid #3A3A3A",
-                    borderRadius: 8,
-                    fontSize: 13.7,
-                    lineHeight: "21px",
-                    color: "#A3A3A3",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {/* ---- Payment Method card ---- */}
-              <div
-                className="absolute"
-                style={{
-                  width: 549,
-                  left: 48,
-                  top: 465,
-                  height: 160,
-                  background: "#252525",
-                  border: "1px solid #3A3A3A",
-                  borderRadius: 12,
-                }}
-              >
-                {/* Title */}
-                <span
-                  className="absolute"
-                  style={{
-                    left: 25,
-                    top: 25,
-                    fontFamily: "'SF Pro', 'Aeonik Pro', sans-serif",
-                    fontWeight: 590,
-                    fontSize: 13.7,
-                    lineHeight: "21px",
-                    color: "#E5E5E5",
-                  }}
-                >
-                  Payment Method
-                </span>
-
-                {/* Card details row */}
-                <div
-                  className="absolute"
-                  style={{
-                    left: 25,
-                    right: 25,
-                    top: 62,
-                    height: 73,
-                    background: "#1A1A1A",
-                    borderRadius: 8,
-                  }}
-                >
-                  {/* VISA badge */}
-                  <div
-                    className="absolute flex items-center justify-center"
                     style={{
-                      left: 16,
-                      top: "calc(50% - 16px + 0.75px)",
-                      width: 48,
-                      height: 32,
-                      background: "#252525",
+                      fontSize: 10,
+                      padding: "2px 6px",
                       borderRadius: 4,
+                      background: "rgba(16, 185, 129, 0.15)",
+                      color: "#10B981",
                     }}
                   >
-                    <span
+                    Save 20%
+                  </span>
+                </button>
+              </div>
+
+              {/* Plan cards grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {(["free", "standard", "pro", "mega"] as const).map((tier) => {
+                  const plan = PLAN_CONFIGS_LOCAL[tier];
+                  const isCurrent = currentPlan === tier;
+                  const price = billingCycle === "annual"
+                    ? Math.round(plan.annualPrice / 12)
+                    : plan.monthlyPrice;
+                  const isPopular = tier === "standard";
+
+                  return (
+                    <div
+                      key={tier}
+                      className="relative flex flex-col"
                       style={{
-                        fontFamily: "'SF Pro', sans-serif",
-                        fontWeight: 700,
-                        fontSize: 10,
-                        lineHeight: "15px",
-                        color: "#E5E5E5",
+                        padding: "20px 18px",
+                        background: isCurrent ? "#2A2A2A" : "#252525",
+                        border: isCurrent
+                          ? "1.5px solid #7CC4F8"
+                          : isPopular
+                            ? "1.5px solid rgba(124, 196, 248, 0.3)"
+                            : "1px solid #3A3A3A",
+                        borderRadius: 12,
+                        opacity: tier === "free" && currentPlan !== "free" ? 0.6 : 1,
                       }}
                     >
-                      VISA
-                    </span>
-                  </div>
+                      {/* Popular badge */}
+                      {isPopular && (
+                        <div
+                          className="absolute flex items-center justify-center"
+                          style={{
+                            top: -10,
+                            right: 16,
+                            height: 20,
+                            padding: "0 8px",
+                            borderRadius: 4,
+                            background: "#7CC4F8",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#000",
+                          }}
+                        >
+                          MOST POPULAR
+                        </div>
+                      )}
 
-                  {/* Card number */}
-                  <span
-                    className="absolute"
-                    style={{ left: 80, top: 16, fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5" }}
-                  >
-                    •••• •••• •••• 4242
-                  </span>
-                  {/* Expiry */}
-                  <span
-                    className="absolute"
-                    style={{ left: 80, top: 37, fontSize: 12.8, lineHeight: "20px", color: "#6B6B6B" }}
-                  >
-                    Expires 12/2025
-                  </span>
+                      {/* Current badge */}
+                      {isCurrent && (
+                        <div
+                          className="flex items-center justify-center"
+                          style={{
+                            width: 82,
+                            height: 22,
+                            borderRadius: 5,
+                            background: "rgba(124, 196, 248, 0.15)",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#7CC4F8",
+                            marginBottom: 8,
+                          }}
+                        >
+                          CURRENT
+                        </div>
+                      )}
 
-                  {/* Update button */}
-                  <button
-                    className="absolute flex items-center justify-center transition-opacity hover:opacity-80"
-                    style={{
-                      width: 78.28,
-                      height: 37.5,
-                      left: 405.72,
-                      top: "calc(50% - 18.75px + 0.75px)",
-                      background: "#252525",
-                      border: "1px solid #3A3A3A",
-                      borderRadius: 6,
-                      fontSize: 12.9,
-                      lineHeight: "20px",
-                      color: "#E5E5E5",
-                    }}
-                  >
-                    Update
-                  </button>
-                </div>
+                      {/* Plan name + price */}
+                      <div className="flex items-baseline justify-between" style={{ marginBottom: 4 }}>
+                        <span style={{ fontSize: 16, fontWeight: 600, color: "#E5E5E5" }}>
+                          {plan.label}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1" style={{ marginBottom: 14 }}>
+                        <span style={{ fontSize: 28, fontWeight: 700, color: "#E5E5E5" }}>
+                          ${price}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#6B6B6B" }}>
+                          /mo
+                        </span>
+                        {billingCycle === "annual" && plan.monthlyPrice > 0 && (
+                          <span style={{ fontSize: 11, color: "#6B6B6B", textDecoration: "line-through", marginLeft: 6 }}>
+                            ${plan.monthlyPrice}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Generation count */}
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          background: "#1A1A1A",
+                          borderRadius: 6,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: "#A3A3A3" }}>
+                          {plan.generationLimit >= 500
+                            ? "Unlimited*"
+                            : `${plan.generationLimit}`}{" "}
+                          AI generations/mo
+                        </span>
+                      </div>
+
+                      {/* Features */}
+                      <div className="flex flex-col gap-2" style={{ marginBottom: 16 }}>
+                        {plan.features.slice(1, 5).map((f, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <CircleCheckIcon />
+                            <span style={{ fontSize: 11.5, lineHeight: "16px", color: "#A3A3A3" }}>
+                              {f}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action button */}
+                      <button
+                        disabled={isCurrent}
+                        className="mt-auto flex items-center justify-center transition-opacity hover:opacity-90"
+                        style={{
+                          height: 38,
+                          borderRadius: 8,
+                          fontSize: 12.8,
+                          fontWeight: 500,
+                          background: isCurrent ? "transparent" : isPopular ? "#FAF9F5" : "transparent",
+                          color: isCurrent ? "#6B6B6B" : isPopular ? "#000" : "#E5E5E5",
+                          border: isCurrent
+                            ? "1px solid #3A3A3A"
+                            : isPopular
+                              ? "none"
+                              : "1px solid #3A3A3A",
+                          cursor: isCurrent ? "default" : "pointer",
+                        }}
+                      >
+                        {isCurrent ? "Current Plan" : tier === "free" ? "Downgrade" : "Upgrade"}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* ---- Billing History card ---- */}
+              {/* Usage card */}
               <div
-                className="absolute"
                 style={{
-                  width: 549,
-                  left: 48,
-                  top: 635,
-                  height: 320,
+                  marginTop: 20,
+                  padding: "18px 20px",
                   background: "#252525",
                   border: "1px solid #3A3A3A",
                   borderRadius: 12,
                 }}
               >
-                {/* Title */}
-                <span
-                  className="absolute"
-                  style={{ left: 25, top: 24.5, fontSize: 13.7, lineHeight: "21px", color: "#E5E5E5" }}
-                >
-                  Billing History
-                </span>
-
-                {/* Invoice rows */}
+                <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+                  <span style={{ fontSize: 13.7, fontWeight: 500, color: "#E5E5E5" }}>
+                    Generation Usage
+                  </span>
+                  <span style={{ fontSize: 12, color: "#6B6B6B" }}>
+                    {generationsUsed} / {PLAN_CONFIGS_LOCAL[currentPlan].generationLimit >= 500 ? "\u221E" : PLAN_CONFIGS_LOCAL[currentPlan].generationLimit}
+                  </span>
+                </div>
+                {/* Progress bar */}
                 <div
-                  className="absolute flex flex-col"
-                  style={{ left: 25, right: 25, top: 61.75, gap: 8 }}
+                  style={{
+                    height: 6,
+                    background: "#1A1A1A",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
                 >
-                  <BillingHistoryRow date="Feb 1, 2026" plan="Pro Plan" amount="$29.00" />
-                  <BillingHistoryRow date="Jan 1, 2026" plan="Pro Plan" amount="$29.00" />
-                  <BillingHistoryRow date="Dec 1, 2025" plan="Pro Plan" amount="$29.00" />
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${Math.min(100, (generationsUsed / Math.max(1, PLAN_CONFIGS_LOCAL[currentPlan].generationLimit)) * 100)}%`,
+                      background: generationsUsed >= PLAN_CONFIGS_LOCAL[currentPlan].generationLimit ? "#EF4444" : "#7CC4F8",
+                      borderRadius: 3,
+                      transition: "width 300ms ease",
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -959,7 +1078,6 @@ export function SettingsModal({
                 <div className="flex flex-col" style={{ gap: 18 }}>
                   {/* Title row: Warning icon + "Delete Account" */}
                   <div className="flex items-center" style={{ gap: 16 }}>
-                    {/* Warning triangle icon */}
                     <svg
                       width="20"
                       height="20"
@@ -1008,65 +1126,60 @@ export function SettingsModal({
 
                   {/* Delete button */}
                   <button
-                    className="relative flex items-center justify-center transition-opacity hover:opacity-90"
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="relative flex items-center justify-center transition-opacity hover:opacity-90 disabled:opacity-50"
                     style={{
-                      width: 203.11,
+                      width: deleteConfirm ? 260 : 203.11,
                       height: 45,
                       background: "#EF4444",
                       borderRadius: 8,
+                      transition: "width 200ms ease",
                     }}
                   >
-                    {/* Trash icon */}
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      style={{
-                        position: "absolute",
-                        left: 24,
-                        top: "calc(50% - 10px)",
-                      }}
-                    >
-                      <path
-                        d="M3.5 5H16.5"
-                        stroke="#FFFFFF"
-                        strokeWidth="1.667"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M5 5V16C5 17.1 5.9 18 7 18H13C14.1 18 15 17.1 15 16V5"
-                        stroke="#FFFFFF"
-                        strokeWidth="1.667"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M8 2H12C12.55 2 13 2.45 13 3V5H7V3C7 2.45 7.45 2 8 2Z"
-                        stroke="#FFFFFF"
-                        strokeWidth="1.667"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                    {deleting ? (
+                      <SpinnerIcon />
+                    ) : (
+                      <>
+                        {/* Trash icon */}
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          style={{
+                            position: "absolute",
+                            left: 24,
+                            top: "calc(50% - 10px)",
+                          }}
+                        >
+                          <path d="M3.5 5H16.5" stroke="#FFFFFF" strokeWidth="1.667" strokeLinecap="round" />
+                          <path d="M5 5V16C5 17.1 5.9 18 7 18H13C14.1 18 15 17.1 15 16V5" stroke="#FFFFFF" strokeWidth="1.667" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M8 2H12C12.55 2 13 2.45 13 3V5H7V3C7 2.45 7.45 2 8 2Z" stroke="#FFFFFF" strokeWidth="1.667" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
 
-                    <span
-                      style={{
-                        fontSize: 13.7,
-                        lineHeight: "21px",
-                        color: "#FFFFFF",
-                        marginLeft: 28,
-                      }}
-                    >
-                      Delete My Account
-                    </span>
+                        <span
+                          style={{
+                            fontSize: 13.7,
+                            lineHeight: "21px",
+                            color: "#FFFFFF",
+                            marginLeft: 28,
+                          }}
+                        >
+                          {deleteConfirm ? "Click again to confirm" : "Delete My Account"}
+                        </span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* Toast notification */}
+        {toast && <StatusToast message={toast.message} type={toast.type} />}
       </div>
     </div>
   );

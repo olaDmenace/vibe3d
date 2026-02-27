@@ -215,18 +215,32 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
   const [expandedObjects, setExpandedObjects] = useState<Set<string>>(new Set());
   const [userName, setUserName] = useState("User");
   const [userPlan, setUserPlan] = useState("Free plan");
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
 
   // Load user info from Supabase
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }: { data: { user: { user_metadata?: Record<string, string>; email?: string } | null } }) => {
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: { id?: string; user_metadata?: Record<string, string>; email?: string } | null } }) => {
       if (user) {
         setUserName(
           user.user_metadata?.display_name ||
             user.email?.split("@")[0] ||
             "User"
         );
-        setUserPlan(user.user_metadata?.plan || "Free plan");
+        // Load avatar + plan from profile
+        if (user.id) {
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single()
+            .then(({ data }: { data: Record<string, unknown> | null }) => {
+              if (data?.avatar_url) setUserAvatarUrl(data.avatar_url as string);
+              const plan = data?.plan as string | undefined;
+              const labels: Record<string, string> = { free: "Free", standard: "Standard", pro: "Pro", mega: "Mega" };
+              setUserPlan((labels[plan ?? "free"] ?? "Free") + " plan");
+            });
+        }
       }
     });
   }, []);
@@ -507,29 +521,42 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
                 border: "1px solid rgba(222, 220, 209, 0.2)",
               }}
             />
-            {/* Inner gradient circle */}
+            {/* Inner circle — avatar image or initials */}
             <div
-              className="absolute rounded-full"
+              className="absolute overflow-hidden rounded-full"
               style={{
                 width: 31,
                 height: 31,
                 top: 3.5,
                 left: 3.5,
-                background: "linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa)",
-              }}
-            />
-            {/* Initials */}
-            <span
-              className="absolute inset-0 flex items-center justify-center"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "white",
-                fontFamily: "'Aeonik Pro', sans-serif",
               }}
             >
-              {userName.charAt(0).toUpperCase()}
-            </span>
+              {userAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa)" }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "white",
+                      fontFamily: "'Aeonik Pro', sans-serif",
+                    }}
+                  >
+                    {(() => {
+                      const parts = userName.trim().split(/\s+/).filter(Boolean);
+                      if (parts.length === 0) return "?";
+                      if (parts.length === 1) return parts[0][0].toUpperCase();
+                      return (parts[0][0] + parts[1][0]).toUpperCase();
+                    })()}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Name + plan */}

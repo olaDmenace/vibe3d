@@ -33,7 +33,7 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
       <EditorToolbar projectId={projectId} projectName={projectName} />
 
       {/* Floating chat input (absolute positioned) */}
-      <ChatPanel />
+      <ChatPanel projectId={projectId} />
 
       {/* Guided tour overlay */}
       <EditorTour />

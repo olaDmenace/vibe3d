@@ -1,7 +1,7 @@
 "use client";
 
 import { useEditorStore } from "@/store/editor-store";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -185,6 +185,7 @@ export function RightSidebar() {
   const selectedObjectId = useEditorStore((s) => s.selectedObjectId);
   const scene = useEditorStore((s) => s.scene);
   const dispatch = useEditorStore((s) => s.dispatch);
+  const [exporting, setExporting] = useState(false);
 
   const selectedObject = selectedObjectId
     ? scene.objects[selectedObjectId] ?? null
@@ -292,13 +293,26 @@ export function RightSidebar() {
         </button>
         <button
           type="button"
-          className="flex h-8 flex-1 items-center justify-center rounded-[14px] bg-white/[0.08] font-[family-name:var(--font-spline-sans)] text-[11px] font-normal text-white/70 transition-colors hover:bg-white/[0.12]"
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              const { exportSceneFromStore: doExport, downloadBlob } = await import("@/lib/three/export-scene");
+              const blob = await doExport(scene);
+              downloadBlob(blob, "scene.glb");
+            } catch (err) {
+              console.error("Export failed:", err);
+            } finally {
+              setExporting(false);
+            }
+          }}
+          className="flex h-8 flex-1 items-center justify-center rounded-[14px] bg-white/[0.08] font-[family-name:var(--font-spline-sans)] text-[11px] font-normal text-white/70 transition-colors hover:bg-white/[0.12] disabled:opacity-50"
           style={{
             boxShadow:
               "0px 2px 8px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.1)",
           }}
         >
-          Export
+          {exporting ? "Exporting..." : "Export"}
         </button>
       </div>
 
