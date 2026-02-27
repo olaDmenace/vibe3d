@@ -1,6 +1,16 @@
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
+import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import type { SceneState } from "@/types/scene";
+
+export type ExportFormat = "glb" | "obj" | "stl";
+
+interface ExportOptions {
+  watermark?: boolean;
+  watermarkText?: string;
+}
 
 const PRIMITIVES = new Set(["cube", "sphere", "plane", "cylinder", "cone", "torus"]);
 
@@ -32,22 +42,82 @@ function createPrimitiveGeometry(type: string): THREE.BufferGeometry {
   }
 }
 
-/**
- * Build a Three.js scene from the editor store's SceneState
- * and export it as a GLB blob. No Canvas required.
- */
-export async function exportSceneFromStore(
+/** Create a watermark plane with text rendered via CanvasTexture */
+function createWatermarkPlane(text: string): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.font = "bold 24px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(text, 256, 40);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const geometry = new THREE.PlaneGeometry(4, 0.5);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = "Vibe3D_Watermark";
+  mesh.position.set(0, 0.01, 0);
+  mesh.rotation.set(-Math.PI / 2, 0, 0);
+  return mesh;
+}
+
+/** Load a GLB model from a URL and return the scene */
+async function loadGLBFromUrl(url: string): Promise<THREE.Group | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Failed to fetch model: ${url} (${response.status})`);
+      return null;
+    }
+    const buffer = await response.arrayBuffer();
+
+    const loader = new GLTFLoader();
+    return new Promise((resolve) => {
+      loader.parse(
+        buffer,
+        "",
+        (gltf) => {
+          resolve(gltf.scene);
+        },
+        (error) => {
+          console.warn(`Failed to parse GLB model from ${url}:`, error);
+          resolve(null);
+        }
+      );
+    });
+  } catch (err) {
+    console.warn(`Failed to load model from ${url}:`, err);
+    return null;
+  }
+}
+
+/** Build a Three.js scene from the editor store's SceneState */
+async function buildScene(
   sceneState: SceneState,
-  options?: { watermark?: boolean }
-): Promise<Blob> {
+  options?: ExportOptions
+): Promise<THREE.Scene> {
   const scene = new THREE.Scene();
   scene.name = "Vibe3D Scene";
 
   if (options?.watermark) {
     scene.userData.watermark = "Created with Vibe3D Free Tier";
+    const watermarkMesh = createWatermarkPlane(
+      options.watermarkText || "Created with Vibe3D — Free Tier"
+    );
+    scene.add(watermarkMesh);
   }
 
   // Add objects
+  const loadPromises: Promise<void>[] = [];
+
   for (const obj of Object.values(sceneState.objects)) {
     if (!obj.visible) continue;
 
@@ -68,12 +138,30 @@ export async function exportSceneFromStore(
       mesh.position.set(...obj.transform.position);
       mesh.rotation.set(...obj.transform.rotation);
       mesh.scale.set(...obj.transform.scale);
-
       scene.add(mesh);
+    } else {
+      // Non-primitive — try to load from modelUrl
+      const modelUrl = (obj.metadata as Record<string, unknown> | undefined)
+        ?.modelUrl as string | undefined;
+      if (modelUrl) {
+        loadPromises.push(
+          loadGLBFromUrl(modelUrl).then((group) => {
+            if (group) {
+              group.name = obj.name;
+              group.position.set(...obj.transform.position);
+              group.rotation.set(...obj.transform.rotation);
+              group.scale.set(...obj.transform.scale);
+              scene.add(group);
+            }
+          })
+        );
+      } else {
+        console.warn(`Skipping object "${obj.name}" — no modelUrl in metadata`);
+      }
     }
-    // Non-primitive objects (GLBs) are skipped for now in export
-    // since they need to be loaded from URLs first
   }
+
+  await Promise.all(loadPromises);
 
   // Add lighting
   const ambient = new THREE.AmbientLight(
@@ -94,9 +182,26 @@ export async function exportSceneFromStore(
     scene.add(light);
   }
 
-  // Export
-  const exporter = new GLTFExporter();
+  return scene;
+}
 
+/** Dispose all resources in a scene */
+function disposeScene(scene: THREE.Scene) {
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((m) => m.dispose());
+      } else if (child.material instanceof THREE.Material) {
+        child.material.dispose();
+      }
+    }
+  });
+}
+
+/** Export as GLB */
+async function exportAsGLB(scene: THREE.Scene): Promise<Blob> {
+  const exporter = new GLTFExporter();
   return new Promise((resolve, reject) => {
     exporter.parse(
       scene,
@@ -107,28 +212,62 @@ export async function exportSceneFromStore(
           const json = JSON.stringify(result);
           resolve(new Blob([json], { type: "model/gltf+json" }));
         }
-
-        // Dispose resources
-        scene.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            if (child.material instanceof THREE.Material) {
-              child.material.dispose();
-            }
-          }
-        });
       },
-      (error) => {
-        reject(error);
-      },
+      (error) => reject(error),
       { binary: true }
     );
   });
 }
 
+/** Export as OBJ */
+function exportAsOBJ(scene: THREE.Scene): Blob {
+  const exporter = new OBJExporter();
+  const result = exporter.parse(scene);
+  return new Blob([result], { type: "text/plain" });
+}
+
+/** Export as STL */
+function exportAsSTL(scene: THREE.Scene): Blob {
+  const exporter = new STLExporter();
+  const result = exporter.parse(scene, { binary: true });
+  return new Blob([result], { type: "application/octet-stream" });
+}
+
 /**
- * Trigger a file download in the browser.
+ * Main export function — builds scene from store state and exports in the
+ * requested format.
  */
+export async function exportScene(
+  sceneState: SceneState,
+  format: ExportFormat = "glb",
+  options?: ExportOptions
+): Promise<Blob> {
+  const scene = await buildScene(sceneState, options);
+
+  try {
+    switch (format) {
+      case "obj":
+        return exportAsOBJ(scene);
+      case "stl":
+        return exportAsSTL(scene);
+      case "glb":
+      default:
+        return await exportAsGLB(scene);
+    }
+  } finally {
+    disposeScene(scene);
+  }
+}
+
+/** Backward-compatible alias */
+export async function exportSceneFromStore(
+  sceneState: SceneState,
+  options?: { watermark?: boolean }
+): Promise<Blob> {
+  return exportScene(sceneState, "glb", options);
+}
+
+/** Trigger a file download in the browser. */
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -139,4 +278,17 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/** File extension for each format */
+export function getExtension(format: ExportFormat): string {
+  switch (format) {
+    case "obj":
+      return "obj";
+    case "stl":
+      return "stl";
+    case "glb":
+    default:
+      return "glb";
+  }
 }

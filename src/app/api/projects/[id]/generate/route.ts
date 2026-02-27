@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   generateFromText,
+  generateFromImage,
   normalizePrompt,
 } from "@/lib/ai/generation-service";
 import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
@@ -36,9 +37,9 @@ export async function POST(
     return apiError("Project not found", 404, "NOT_FOUND");
   }
 
-  const result = await validateBody(request, generateSchema);
-  if ("error" in result) return result.error;
-  const { prompt, style } = result.data;
+  const validated = await validateBody(request, generateSchema);
+  if ("error" in validated) return validated.error;
+  const { prompt, style, imageUrl } = validated.data;
 
   // ---- Rate limit check ----
   const { data: profile } = await supabase
@@ -105,10 +106,9 @@ export async function POST(
 
   // ---- Start generation ----
   try {
-    const result = await generateFromText(prompt, {
-      style,
-      provider: "meshy",
-    });
+    const result = imageUrl
+      ? await generateFromImage(imageUrl, { provider: "meshy" })
+      : await generateFromText(prompt, { style, provider: "meshy" });
 
     // Increment generation count
     await supabase

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import { Search, ChevronDown, ChevronRight, Trash2, Settings, Plus, LogOut } from "lucide-react";
 import { SettingsModal } from "@/components/settings/settings-modal";
+import { TrashSection } from "@/components/dashboard/trash-section";
 import type { Tables } from "@/types/database";
 
 type Project = Tables<"projects">;
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, pages: 0 });
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -74,6 +76,26 @@ export default function DashboardPage() {
         }
       }
       loadProjects();
+
+      // Check for billing return
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("billing") === "success") {
+        // Reload profile to get updated plan
+        const { data: updatedProfile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        if (updatedProfile) {
+          const p = (updatedProfile as Record<string, unknown>)?.plan as string | undefined;
+          if (p) {
+            const labels: Record<string, string> = { free: "Free", standard: "Standard", pro: "Pro", mega: "Mega" };
+            setUserPlan(labels[p] ?? "Free");
+          }
+        }
+        // Clean URL
+        window.history.replaceState({}, "", "/dashboard");
+      }
     };
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -594,6 +616,13 @@ export default function DashboardPage() {
               <button className="flex h-6 items-center rounded-[6.5px] border border-[rgba(222,220,209,0.15)] bg-[#262624] px-3 text-[10.8px] tracking-[0.055px] text-white">
                 Recently viewed
               </button>
+              <button
+                onClick={() => setTrashOpen(true)}
+                className="flex h-6 items-center gap-1 rounded-[6.5px] border border-[rgba(222,220,209,0.15)] bg-[#262624] px-3 text-[10.8px] tracking-[0.055px] text-white/60 transition-colors hover:text-white/80"
+              >
+                <Trash2 size={11} />
+                Trash
+              </button>
               <div className="flex h-6 items-center gap-1 rounded-[5px] bg-[rgba(255,255,255,0.05)] px-2">
                 <span className="text-[10.8px] tracking-[0.055px] text-white">Last viewed</span>
                 <ChevronDown size={12} className="text-[rgba(255,255,255,0.5)]" />
@@ -740,6 +769,9 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ============ Trash Modal ============ */}
+      <TrashSection open={trashOpen} onClose={() => setTrashOpen(false)} />
 
       {/* ============ Settings Modal ============ */}
       <SettingsModal

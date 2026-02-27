@@ -220,6 +220,7 @@ export function SettingsModal({
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [currentPlan, setCurrentPlan] = useState<PlanTier>("free");
   const [generationsUsed, setGenerationsUsed] = useState(0);
+  const [upgradingTier, setUpgradingTier] = useState<PlanTier | null>(null);
 
   // UI states
   const [saving, setSaving] = useState(false);
@@ -988,7 +989,28 @@ export function SettingsModal({
 
                       {/* Action button */}
                       <button
-                        disabled={isCurrent}
+                        disabled={isCurrent || upgradingTier === tier}
+                        onClick={async () => {
+                          if (tier === "free" || isCurrent) return;
+                          setUpgradingTier(tier);
+                          try {
+                            const res = await fetch("/api/billing/checkout", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ tier, cycle: billingCycle }),
+                            });
+                            const data = await res.json();
+                            if (res.ok && data.checkoutUrl) {
+                              window.location.href = data.checkoutUrl;
+                            } else {
+                              setToast({ message: data.error || "Failed to start checkout", type: "error" });
+                            }
+                          } catch {
+                            setToast({ message: "Failed to start checkout", type: "error" });
+                          } finally {
+                            setUpgradingTier(null);
+                          }
+                        }}
                         className="mt-auto flex items-center justify-center transition-opacity hover:opacity-90"
                         style={{
                           height: 38,
@@ -1005,7 +1027,7 @@ export function SettingsModal({
                           cursor: isCurrent ? "default" : "pointer",
                         }}
                       >
-                        {isCurrent ? "Current Plan" : tier === "free" ? "Downgrade" : "Upgrade"}
+                        {upgradingTier === tier ? "Redirecting..." : isCurrent ? "Current Plan" : tier === "free" ? "Downgrade" : "Upgrade"}
                       </button>
                     </div>
                   );

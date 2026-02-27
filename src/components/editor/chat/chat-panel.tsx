@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useEditorStore } from "@/store/editor-store";
+import { createClient } from "@/lib/supabase/client";
 import type { EditorAction } from "@/types/actions";
 
 interface ChatMessage {
@@ -26,11 +27,15 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [generationJob, setGenerationJob] = useState<GenerationJob | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const dispatch = useEditorStore((s) => s.dispatch);
+  const supabase = createClient();
 
   // Load conversation history on mount
   useEffect(() => {
@@ -123,6 +128,94 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
     },
     [projectId, dispatch]
   );
+
+  const handleImageUpload = useCallback(async (file: File) => {
+    if (!projectId) return;
+    setUploadingImage(true);
+
+    try {
+      // Upload to Supabase Storage
+      const ext = file.name.split(".").pop() || "png";
+      const path = `image-to-3d/${projectId}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("assets")
+        .upload(path, file, { contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      // Get signed URL
+      const { data: urlData } = await supabase.storage
+        .from("assets")
+        .createSignedUrl(path, 3600);
+
+      if (!urlData?.signedUrl) throw new Error("Failed to get signed URL");
+
+      // Show preview
+      setImagePreview(URL.createObjectURL(file));
+      setExpanded(true);
+
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: `Generate 3D model from uploaded image`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+
+      // Call generate with imageUrl
+      const res = await fetch(`/api/projects/${projectId}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "image-to-3d", imageUrl: urlData.signedUrl }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMsg = data.upgrade
+          ? `Generation limit reached (${data.used}/${data.limit}). Upgrade your plan.`
+          : data.error || "Generation failed";
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: errorMsg, timestamp: new Date().toISOString() },
+        ]);
+      } else if (data.cached) {
+        const objId = crypto.randomUUID();
+        dispatch({
+          type: "ADD_OBJECT",
+          id: objId,
+          payload: {
+            name: "Image-to-3D Model",
+            parentId: null,
+            assetId: data.asset.id,
+            visible: true,
+            locked: false,
+            transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+            materialOverrides: [],
+            metadata: { cached: true },
+          },
+        });
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Found a cached model and added it to your scene.", timestamp: new Date().toISOString() },
+        ]);
+      } else {
+        setGenerationJob({ taskId: data.taskId, prompt: "Image-to-3D", status: "pending", progress: 0 });
+        pollGeneration(data.taskId, "Image-to-3D");
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Generating 3D model from your image... This may take a minute.", timestamp: new Date().toISOString() },
+        ]);
+      }
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Failed to process image. Please try again.", timestamp: new Date().toISOString() },
+      ]);
+    } finally {
+      setUploadingImage(false);
+      setImagePreview(null);
+    }
+  }, [projectId, dispatch, pollGeneration, supabase.storage]);
 
   const handleSend = async () => {
     const trimmed = message.trim();
@@ -469,12 +562,38 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
             />
           </div>
 
+          {/* Image upload preview */}
+          {(uploadingImage || imagePreview) && (
+            <div className="flex items-center gap-2 px-3 pb-1">
+              {imagePreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imagePreview} alt="Upload" className="h-8 w-8 rounded object-cover" />
+              )}
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'Spline Sans', sans-serif" }}>
+                {uploadingImage ? "Uploading & generating..." : "Processing image..."}
+              </span>
+            </div>
+          )}
+
           {/* Bottom row inside textarea container */}
           <div className="flex items-center justify-between px-3 pb-3">
-            {/* Attach icon button (left) */}
+            {/* Attach / Image upload button (left) */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+                e.target.value = "";
+              }}
+            />
             <button
-              title="Attach"
-              className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+              title="Upload image for 3D generation"
+              disabled={uploadingImage}
+              onClick={() => imageInputRef.current?.click()}
+              className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors disabled:opacity-40"
               style={{
                 width: 31,
                 height: 31,
@@ -485,7 +604,7 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
             >
               <Image
                 src="/assets/icons/dashboard-attach.svg"
-                alt="Attach"
+                alt="Upload Image"
                 width={20}
                 height={20}
                 style={{ opacity: 0.7 }}

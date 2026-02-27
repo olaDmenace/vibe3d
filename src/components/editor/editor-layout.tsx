@@ -27,7 +27,7 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
       <LeftSidebar projectId={projectId} projectName={projectName} />
 
       {/* Floating right sidebar (fixed positioned) */}
-      <RightSidebar />
+      <RightSidebar projectId={projectId} />
 
       {/* Floating toolbar (absolute positioned) */}
       <EditorToolbar projectId={projectId} projectName={projectName} />

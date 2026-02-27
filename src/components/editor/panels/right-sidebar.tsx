@@ -2,6 +2,8 @@
 
 import { useEditorStore } from "@/store/editor-store";
 import { useCallback, useMemo, useState } from "react";
+import type { ExportFormat } from "@/lib/three/export-scene";
+import { SharingModal } from "@/components/editor/sharing-modal";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -181,11 +183,14 @@ function AssetSection({
 // Main export
 // ---------------------------------------------------------------------------
 
-export function RightSidebar() {
+export function RightSidebar({ projectId }: { projectId?: string }) {
   const selectedObjectId = useEditorStore((s) => s.selectedObjectId);
   const scene = useEditorStore((s) => s.scene);
   const dispatch = useEditorStore((s) => s.dispatch);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("glb");
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const selectedObject = selectedObjectId
     ? scene.objects[selectedObjectId] ?? null
@@ -283,6 +288,7 @@ export function RightSidebar() {
       <div className="flex items-center gap-1.5 p-2" style={{ height: 49 }}>
         <button
           type="button"
+          onClick={() => projectId && setShareOpen(true)}
           className="flex h-8 flex-1 items-center justify-center rounded-[14px] bg-white/[0.08] font-[family-name:var(--font-spline-sans)] text-[11px] font-medium text-white/70 transition-colors hover:bg-white/[0.12]"
           style={{
             boxShadow:
@@ -291,29 +297,55 @@ export function RightSidebar() {
         >
           Share
         </button>
-        <button
-          type="button"
-          disabled={exporting}
-          onClick={async () => {
-            setExporting(true);
-            try {
-              const { exportSceneFromStore: doExport, downloadBlob } = await import("@/lib/three/export-scene");
-              const blob = await doExport(scene);
-              downloadBlob(blob, "scene.glb");
-            } catch (err) {
-              console.error("Export failed:", err);
-            } finally {
-              setExporting(false);
-            }
-          }}
-          className="flex h-8 flex-1 items-center justify-center rounded-[14px] bg-white/[0.08] font-[family-name:var(--font-spline-sans)] text-[11px] font-normal text-white/70 transition-colors hover:bg-white/[0.12] disabled:opacity-50"
-          style={{
-            boxShadow:
-              "0px 2px 8px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.1)",
-          }}
-        >
-          {exporting ? "Exporting..." : "Export"}
-        </button>
+        <div className="relative flex-1">
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => setShowExportMenu((prev) => !prev)}
+            className="flex h-8 w-full items-center justify-center gap-1 rounded-[14px] bg-white/[0.08] font-[family-name:var(--font-spline-sans)] text-[11px] font-normal text-white/70 transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+            style={{
+              boxShadow:
+                "0px 2px 8px rgba(0,0,0,0.1), inset 0px 1px 0px rgba(255,255,255,0.1)",
+            }}
+          >
+            {exporting ? "Exporting..." : `Export .${exportFormat}`}
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+            </svg>
+          </button>
+          {showExportMenu && (
+            <div className="absolute right-0 top-9 z-50 w-full overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#1F1F18]">
+              {(["glb", "obj", "stl"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={async () => {
+                    setExportFormat(fmt);
+                    setShowExportMenu(false);
+                    setExporting(true);
+                    try {
+                      const { exportScene, downloadBlob, getExtension } = await import("@/lib/three/export-scene");
+                      const blob = await exportScene(scene, fmt);
+                      downloadBlob(blob, `scene.${getExtension(fmt)}`);
+                    } catch (err) {
+                      console.error("Export failed:", err);
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                  className="flex w-full items-center px-3 py-2 text-left font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 transition-colors hover:bg-white/[0.06]"
+                >
+                  .{fmt.toUpperCase()}
+                  {fmt === exportFormat && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="ml-auto">
+                      <path d="M2.5 6.5L5 9L9.5 3.5" stroke="#7CC4F8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
@@ -440,6 +472,15 @@ export function RightSidebar() {
         {/* ----- Audio Assets section ----- */}
         <AssetSection label="Audio Assets" />
       </div>
+
+      {/* Sharing Modal */}
+      {projectId && (
+        <SharingModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          projectId={projectId}
+        />
+      )}
     </div>
   );
 }

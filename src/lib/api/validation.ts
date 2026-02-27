@@ -96,6 +96,7 @@ export const chatMessageSchema = z.object({
 export const generateSchema = z.object({
   prompt: z.string().min(1).max(1000),
   style: z.string().max(50).optional(),
+  imageUrl: z.string().url().optional(),
 });
 
 /* ------------------------------------------------------------------ */

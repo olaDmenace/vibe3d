@@ -1,7 +1,7 @@
 # Progress Tracker
 
 ## Current Phase
-Phase 3 — AI Chat & Generation + Billing Plans
+Phase 6 — Final Features Before Launch
 
 ## Completed
 
@@ -108,17 +108,36 @@ Phase 3 — AI Chat & Generation + Billing Plans
 - [x] TypeScript types updated: `deleted_at` added to projects in `database.ts` — 2026-02-27
 - [x] Google OAuth confirmed configured on Supabase Dashboard — 2026-02-27
 
+### Phase 6 — Final Features Before Launch
+- [x] Whop Billing: installed @whop/sdk, created whop.ts client + plan ID mapping — 2026-02-27
+- [x] Whop Billing: POST /api/billing/checkout — creates Whop checkout session with plan_id + metadata — 2026-02-27
+- [x] Whop Billing: POST /api/webhooks/whop — webhook handler with signature verification, handles payment.succeeded, membership.activated/deactivated, payment.failed — 2026-02-27
+- [x] Whop Billing: GET /api/billing/subscription — returns current plan, config, usage, cycle start — 2026-02-27
+- [x] Whop Billing: Settings modal billing tab wired to create Whop checkout + redirect — 2026-02-27
+- [x] Whop Billing: Dashboard handles `?billing=success` return URL, reloads profile plan — 2026-02-27
+- [x] Non-primitive model export: GLB models loaded from `obj.metadata.modelUrl` via GLTFLoader during export — 2026-02-27
+- [x] OBJ export via OBJExporter — 2026-02-27
+- [x] STL export via STLExporter — 2026-02-27
+- [x] Export format selector in right sidebar: GLB/OBJ/STL dropdown — 2026-02-27
+- [x] Visual watermark for Free tier exports: CanvasTexture on PlaneGeometry added to exported scene — 2026-02-27
+- [x] Image-to-3D frontend: image upload in chat panel → Supabase Storage → generate API with imageUrl — 2026-02-27
+- [x] Sharing modal: email invite, permission selector (view/edit/admin), collaborator list, remove button — 2026-02-27
+- [x] Sharing modal wired into right sidebar Share button — 2026-02-27
+- [x] Trash & Restore UI: modal with trashed projects list, restore button, permanent delete button — 2026-02-27
+- [x] Trash API routes: GET /api/projects/trash, POST /api/projects/[id]/restore, DELETE /api/projects/[id]/permanent — 2026-02-27
+- [x] Trash button added to dashboard filter row — 2026-02-27
+- [x] CLAUDE.md updated: Whop SDK added to tech stack — 2026-02-27
+- [x] .env.example updated: WHOP_API_KEY, WHOP_WEBHOOK_SECRET, WHOP_COMPANY_ID, SUPABASE_SERVICE_ROLE_KEY — 2026-02-27
+
 ## In Progress
 - (none)
 
 ## Blocked / Deferred
 - shadcn/ui not yet installed — using plain Tailwind for now.
-- Stripe/Paddle payment integration — plan switching is frontend-only, no real payment processing yet.
-- Non-primitive model export — GLB export currently builds primitives only; loaded GLB models are skipped (need to be fetched from URL first).
-- FBX/OBJ/STL export formats — only GLB is supported currently.
-- Watermark injection for Free tier — metadata flag is set but no visual watermark in exported file.
-- Sharing UI on dashboard — API is wired but no frontend for inviting/viewing collaborators yet.
-- Trash/restore UI — soft delete is in place but no way to view or restore trashed projects from the dashboard.
+- FBX export: no reliable client-side FBX exporter exists for Three.js — deferred indefinitely.
+- Free tier export format restriction: free users should only see GLB (other formats greyed out with upgrade prompt) — not yet enforced in UI.
+- View-only permission enforcement: view-only shared users should not be able to use transform tools or generate models — not yet enforced.
+- Cron job for auto-purging trashed projects older than 30 days — not yet implemented.
 
 ## Decisions & Notes
 - Used Lucide React icons for editor toolbar since Figma MCP was initially rate-limited. Icons are centralized for easy swap.
@@ -135,7 +154,13 @@ Phase 3 — AI Chat & Generation + Billing Plans
 - Generation requests that match a cached `ai_prompt` in the `assets` table skip the Meshy API call entirely.
 - Zod validation added to all API routes. Schemas centralized in `src/lib/api/validation.ts`.
 - All API errors use standardized `{ error, code, details }` format via `apiError()` helper.
+- Whop SDK (`@whop/sdk`) used for billing. `Whop` class (default export), not `WhopServerSdk`. Checkout via `checkoutConfigurations.create()`, webhook verification via `webhooks.unwrap()`.
+- Whop plan IDs are placeholders (`plan_STANDARD_MONTHLY` etc.) — must be replaced with actual IDs from Whop dashboard before launch.
+- Whop webhook handler uses Supabase service role client (no user context available in webhooks).
+- Export supports GLB (GLTFExporter), OBJ (OBJExporter), STL (STLExporter). FBX deferred — no reliable client-side exporter.
+- Non-primitive models loaded during export via GLTFLoader.parse() from `obj.metadata.modelUrl` signed URLs.
 - GLB export builds a Three.js scene from store data (no Canvas/R3F context needed), exports via GLTFExporter, and disposes resources after.
+- Visual watermark for free tier: CanvasTexture with text rendered on a PlaneGeometry, semi-transparent, added to the export scene root.
 - Asset uploads validated for MIME type + extension fallback + 50MB size limit. Storage path: `{userId}/{projectId}/{assetId}.{ext}`.
 - Free tier enforced at project creation time by checking `profiles.plan` + counting existing projects vs `PLAN_CONFIGS.projectLimit`.
 - Soft deletes: DELETE /api/projects/[id] sets `deleted_at` timestamp instead of removing the row. All list/get queries filter `WHERE deleted_at IS NULL`.
