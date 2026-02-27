@@ -152,5 +152,31 @@ export async function POST(
     return apiError(error.message, 500, "DB_ERROR");
   }
 
+  // Send invite email (fire-and-forget)
+  try {
+    const { sendInviteEmail } = await import("@/lib/email/send-invite");
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+    const inviterName = ownerProfile?.display_name || "Someone";
+    const { data: projectInfo } = await supabase
+      .from("projects")
+      .select("name")
+      .eq("id", projectId)
+      .single();
+    const origin = request.headers.get("origin") || "https://vibe3d.app";
+    sendInviteEmail({
+      to: email,
+      inviterName,
+      projectName: projectInfo?.name || "Untitled Project",
+      permission,
+      acceptUrl: `${origin}/editor/${projectId}`,
+    });
+  } catch (emailErr) {
+    console.error("[shares] Failed to send invite email:", emailErr);
+  }
+
   return NextResponse.json({ share }, { status: 201 });
 }

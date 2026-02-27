@@ -40,6 +40,23 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
   const onboardingCompleted = user?.user_metadata?.onboarding_completed;
 
+  // Send welcome email for new users (fire-and-forget)
+  if (user && !onboardingCompleted) {
+    try {
+      const { sendWelcomeEmail } = await import("@/lib/email/send-welcome");
+      const dashOrigin = request.headers.get("x-forwarded-host")
+        ? `https://${request.headers.get("x-forwarded-host")}`
+        : origin;
+      sendWelcomeEmail({
+        to: user.email!,
+        userName: user.user_metadata?.display_name || user.email?.split("@")[0] || "there",
+        dashboardUrl: `${dashOrigin}/dashboard`,
+      });
+    } catch (emailErr) {
+      console.error("[auth/callback] Failed to send welcome email:", emailErr);
+    }
+  }
+
   let next = searchParams.get("next");
   if (!next || !next.startsWith("/")) {
     next = onboardingCompleted ? "/dashboard" : "/onboarding";

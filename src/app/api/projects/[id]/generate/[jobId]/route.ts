@@ -40,12 +40,16 @@ export async function GET(
   // Check generation status
   const status = await checkGenerationStatus(jobId);
 
-  // If complete, download and store the model
+  // If complete, download and store the model, then return a Supabase signed URL
+  let signedModelUrl: string | null = null;
+
   if (status.status === "complete" && status.modelUrl) {
+    const storagePath = `${user.id}/${projectId}/${jobId}.glb`;
+
     // Check if asset already exists for this task
     const { data: existing } = await supabase
       .from("assets")
-      .select("id")
+      .select("id, storage_path")
       .eq("project_id", projectId)
       .eq("metadata->>taskId", jobId)
       .limit(1)
@@ -53,7 +57,7 @@ export async function GET(
 
     if (!existing) {
       try {
-        // Download the model
+        // Download the model from Meshy CDN (server-side, no CORS)
         const { buffer, contentType } = await downloadModel(status.modelUrl);
 
         // Get the prompt from the query string
@@ -61,7 +65,6 @@ export async function GET(
         const prompt = url.searchParams.get("prompt") ?? "ai-model";
 
         // Upload to Supabase Storage
-        const storagePath = `${user.id}/${projectId}/${jobId}.glb`;
         const { error: uploadError } = await supabase.storage
           .from("assets")
           .upload(storagePath, buffer, {
@@ -94,13 +97,23 @@ export async function GET(
         console.error("[generate] Download/upload failed:", err);
       }
     }
+
+    // Generate a signed URL for the model in Supabase Storage
+    const assetPath = existing?.storage_path ?? storagePath;
+    const { data: urlData } = await supabase.storage
+      .from("assets")
+      .createSignedUrl(assetPath, 3600); // 1 hour expiry
+
+    if (urlData?.signedUrl) {
+      signedModelUrl = urlData.signedUrl;
+    }
   }
 
   return NextResponse.json({
     taskId: status.taskId,
     status: status.status,
     progress: status.progress,
-    modelUrl: status.modelUrl,
+    modelUrl: signedModelUrl ?? status.modelUrl,
     thumbnailUrl: status.thumbnailUrl,
     error: status.error,
   });

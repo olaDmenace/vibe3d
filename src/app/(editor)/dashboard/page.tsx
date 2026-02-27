@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
-import { Search, ChevronDown, ChevronRight, Trash2, Settings, Plus, LogOut } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Trash2, Settings, Plus, LogOut, Mic, MicOff } from "lucide-react";
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { TrashSection } from "@/components/dashboard/trash-section";
 import type { Tables } from "@/types/database";
@@ -47,9 +47,62 @@ export default function DashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, pages: 0 });
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  // Voice input via Web Speech API
+  const toggleVoice = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) {
+        setPrompt((prev) => (prev ? prev + " " + transcript : transcript));
+      }
+    };
+
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isListening]);
+
+  // File attachment — navigate to editor with image
+  const handleFileAttach = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Store in sessionStorage so the editor can pick it up
+    const reader = new FileReader();
+    reader.onload = () => {
+      sessionStorage.setItem("vibe3d-pending-image", reader.result as string);
+      sessionStorage.setItem("vibe3d-pending-image-name", file.name);
+      createProject("Image upload: " + file.name);
+    };
+    reader.readAsDataURL(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Redirect to onboarding if not completed & load user info
   useEffect(() => {
@@ -134,6 +187,10 @@ export default function DashboardPage() {
     });
     if (res.ok) {
       const { project } = await res.json();
+      // Store the prompt so the editor can auto-trigger generation
+      if (initialPrompt) {
+        sessionStorage.setItem("vibe3d-pending-prompt", initialPrompt);
+      }
       router.push(`/editor/${project.id}`);
     }
     setCreating(false);
@@ -547,18 +604,50 @@ export default function DashboardPage() {
                   }}
                 />
               </div>
-              {/* Bottom row: attach left, audio right */}
+              {/* Bottom row: attach left, voice + submit right */}
               <div className="flex items-center justify-between px-3 pb-3">
-                <button type="button" className="flex h-[31px] w-[31px] items-center justify-center rounded-[5.4px] transition-opacity hover:opacity-80">
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileAttach}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-[31px] w-[31px] items-center justify-center rounded-[5.4px] transition-opacity hover:opacity-80"
+                  title="Upload an image for 3D generation"
+                >
                   <Image src="/assets/icons/dashboard-attach.svg" alt="Attach" width={20} height={20} style={{ opacity: 0.7 }} />
                 </button>
-                <button
-                  type="submit"
-                  disabled={!prompt.trim() || creating}
-                  className="flex h-[32px] w-[32px] items-center justify-center rounded-[8px] transition-opacity disabled:opacity-30"
-                >
-                  <Image src="/assets/icons/dashboard-audio.svg" alt="Voice" width={20} height={20} style={{ opacity: 0.7 }} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Voice button */}
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    className={`flex h-[32px] w-[32px] items-center justify-center rounded-[8px] transition-opacity ${isListening ? "bg-red-500/20" : ""}`}
+                    title={isListening ? "Stop listening" : "Voice input"}
+                  >
+                    {isListening ? (
+                      <MicOff size={18} className="text-red-400" />
+                    ) : (
+                      <Image src="/assets/icons/dashboard-audio.svg" alt="Voice" width={20} height={20} style={{ opacity: 0.7 }} />
+                    )}
+                  </button>
+                  {/* Submit button */}
+                  <button
+                    type="submit"
+                    disabled={!prompt.trim() || creating}
+                    className="flex h-[32px] w-[32px] items-center justify-center rounded-[8px] bg-[var(--text-primary)] transition-opacity disabled:opacity-30"
+                    title="Generate"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8H13M9 4L13 8L9 12" stroke="var(--page-bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
 

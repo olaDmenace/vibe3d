@@ -143,7 +143,29 @@ function applyAction(
     case "UPDATE_MATERIAL": {
       const obj = state.scene.objects[action.id];
       if (obj) {
-        obj.materialOverrides = action.overrides;
+        // Merge overrides by materialIndex + meshName.
+        // If an incoming override has a meshName, it matches an existing
+        // override with the same meshName OR the same materialIndex (global).
+        // This prevents duplicates when the AI targets a named mesh that
+        // was previously set as a global override.
+        const existing = obj.materialOverrides;
+        for (const incoming of action.overrides) {
+          // First try to find an exact meshName match
+          let idx = incoming.meshName
+            ? existing.findIndex((e) => e.meshName === incoming.meshName)
+            : -1;
+          // Fall back to matching by materialIndex (regardless of meshName)
+          if (idx < 0) {
+            idx = existing.findIndex(
+              (e) => e.materialIndex === incoming.materialIndex && !e.meshName
+            );
+          }
+          if (idx >= 0) {
+            Object.assign(existing[idx], incoming);
+          } else {
+            existing.push(incoming);
+          }
+        }
       }
       break;
     }

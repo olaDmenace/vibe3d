@@ -32,10 +32,13 @@ function getAnthropicClient(): Anthropic {
 /** Build a system prompt that includes the scene context */
 function buildSystemPrompt(scene: SceneState): string {
   const objectList = Object.values(scene.objects)
-    .map(
-      (o) =>
-        `  - id: "${o.id}", name: "${o.name}", position: [${o.transform.position}], rotation: [${o.transform.rotation}], scale: [${o.transform.scale}], visible: ${o.visible}, locked: ${o.locked}`
-    )
+    .map((o) => {
+      const meshNames = (o.metadata?.meshNames as string[] | undefined) ?? [];
+      const meshInfo = meshNames.length > 0
+        ? `, meshNames: [${meshNames.map((n) => `"${n}"`).join(", ")}]`
+        : "";
+      return `  - id: "${o.id}", name: "${o.name}", position: [${o.transform.position}], rotation: [${o.transform.rotation}], scale: [${o.transform.scale}], visible: ${o.visible}, locked: ${o.locked}${meshInfo}`;
+    })
     .join("\n");
 
   return `You are an AI assistant embedded in a 3D editor called Vibe3D.
@@ -63,7 +66,12 @@ Available action types:
 2. DELETE_OBJECT: { type: "DELETE_OBJECT", id: "<existing-object-id>" }
 3. DUPLICATE_OBJECT: { type: "DUPLICATE_OBJECT", sourceId: "<existing-id>", newId: "<uuid>" }
 4. TRANSFORM_OBJECT: { type: "TRANSFORM_OBJECT", id: "<existing-id>", transform: { position?: [x,y,z], rotation?: [x,y,z], scale?: [x,y,z] } }
-5. UPDATE_MATERIAL: { type: "UPDATE_MATERIAL", id: "<existing-id>", overrides: [{ materialIndex: 0, color?: "#hex", roughness?: 0-1, metalness?: 0-1, opacity?: 0-1 }] }
+5. UPDATE_MATERIAL: { type: "UPDATE_MATERIAL", id: "<existing-id>", overrides: [{ materialIndex: 0, meshName?: "<mesh-name>", color?: "#hex", roughness?: 0-1, metalness?: 0-1, opacity?: 0-1 }] }
+   - When an object has MULTIPLE meshNames listed, use meshName to target specific parts (e.g. tires, body, windows). Each override with a meshName only affects that specific mesh.
+   - When an object has only ONE mesh (or no meshNames), do NOT use meshName — just use materialIndex: 0. The override applies to the whole model.
+   - If the user asks to change a specific part but the model only has one mesh, explain that the AI-generated model was created as a single mesh and individual parts cannot be recolored separately. Suggest regenerating the model or adding separate primitive objects.
+   - You can include multiple overrides in the array to target different parts simultaneously.
+   - Mesh names often contain descriptive keywords like "tire", "wheel", "body", "glass", "seat" etc. Match user intent to the closest mesh name.
 6. RENAME_OBJECT: { type: "RENAME_OBJECT", id: "<existing-id>", name: "<new-name>" }
 7. SET_VISIBILITY: { type: "SET_VISIBILITY", id: "<existing-id>", visible: true|false }
 8. SET_LOCKED: { type: "SET_LOCKED", id: "<existing-id>", locked: true|false }

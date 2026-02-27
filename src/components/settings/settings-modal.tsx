@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
 import { useTheme } from "@/components/theme-provider";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { setLocale } from "@/app/actions/set-locale";
+import { LOCALE_LABELS, type SupportedLocale } from "@/i18n/locales";
 
 const PLAN_CONFIGS_LOCAL = PLAN_CONFIGS;
 
@@ -203,6 +206,7 @@ export function SettingsModal({
   onAvatarChange,
   onAccountDeleted,
 }: SettingsModalProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -381,6 +385,13 @@ export function SettingsModal({
     }
     setPushNotifications(v);
     savePreferences({ theme, language, push_notifications: v, email_updates: emailUpdates });
+  };
+
+  const handleLanguageChange = async (newLocale: string) => {
+    setLanguage(newLocale);
+    savePreferences({ theme, language: newLocale, push_notifications: pushNotifications, email_updates: emailUpdates });
+    await setLocale(newLocale);
+    router.refresh();
   };
 
   const handleEmailUpdatesChange = (v: boolean) => {
@@ -748,23 +759,33 @@ export function SettingsModal({
 
                 {/* Language dropdown */}
                 <div
-                  className="absolute flex items-center justify-between"
+                  className="absolute"
                   style={{
                     left: 25,
                     right: 27,
                     top: 186.75,
-                    height: 45,
-                    background: "var(--input-bg)",
-                    border: "1px solid var(--border-strong)",
-                    borderRadius: 8,
-                    paddingLeft: 21,
-                    paddingRight: 14,
                   }}
                 >
-                  <span style={{ fontSize: 13.7, lineHeight: "16px", color: "var(--text-primary)" }}>
-                    {language === "en" ? "English" : language}
-                  </span>
-                  <ChevronDownIcon />
+                  <select
+                    value={language}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                    className="w-full appearance-none outline-none"
+                    style={{
+                      height: 45,
+                      background: "var(--input-bg)",
+                      border: "1px solid var(--border-strong)",
+                      borderRadius: 8,
+                      paddingLeft: 21,
+                      paddingRight: 36,
+                      fontSize: 13.7,
+                      lineHeight: "16px",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {(Object.entries(LOCALE_LABELS) as [SupportedLocale, string][]).map(([code, label]) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

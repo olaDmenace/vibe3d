@@ -52,6 +52,9 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
       .catch(() => {});
   }, [projectId]);
 
+  // Ref for auto-trigger (must be declared before pollGeneration for the effect below)
+  const autoTriggeredRef = useRef(false);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -136,6 +139,79 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
     },
     [projectId, dispatch, notify]
   );
+
+  // Auto-trigger generation from dashboard prompt (stored in sessionStorage)
+  useEffect(() => {
+    if (!projectId || autoTriggeredRef.current) return;
+    const pendingPrompt = sessionStorage.getItem("vibe3d-pending-prompt");
+    if (!pendingPrompt) return;
+
+    autoTriggeredRef.current = true;
+    sessionStorage.removeItem("vibe3d-pending-prompt");
+
+    // Auto-submit the generation
+    (async () => {
+      setExpanded(true);
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: pendingPrompt,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+
+      try {
+        const res = await fetch(`/api/projects/${projectId}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: pendingPrompt }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          const errorMsg = data.upgrade
+            ? `Generation limit reached (${data.used}/${data.limit}). Upgrade your plan.`
+            : data.error || "Generation failed";
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: errorMsg, timestamp: new Date().toISOString() },
+          ]);
+        } else if (data.cached) {
+          const objId = crypto.randomUUID();
+          dispatch({
+            type: "ADD_OBJECT",
+            id: objId,
+            payload: {
+              name: pendingPrompt.slice(0, 40),
+              parentId: null,
+              assetId: data.asset.id,
+              visible: true,
+              locked: false,
+              transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+              materialOverrides: [],
+              metadata: { cached: true },
+            },
+          });
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Found a cached model for "${pendingPrompt}" and added it to your scene.`, timestamp: new Date().toISOString() },
+          ]);
+        } else {
+          setGenerationJob({ taskId: data.taskId, prompt: pendingPrompt, status: "pending", progress: 0 });
+          pollGeneration(data.taskId, pendingPrompt);
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Generating 3D model for "${pendingPrompt}"... This may take a minute.`, timestamp: new Date().toISOString() },
+          ]);
+        }
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Failed to start generation. Please try again.", timestamp: new Date().toISOString() },
+        ]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, dispatch, pollGeneration]);
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!projectId) return;

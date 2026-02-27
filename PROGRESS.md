@@ -129,6 +129,26 @@ Phase 6 — Final Features Before Launch
 - [x] CLAUDE.md updated: Whop SDK added to tech stack — 2026-02-27
 - [x] .env.example updated: WHOP_API_KEY, WHOP_WEBHOOK_SECRET, WHOP_COMPANY_ID, SUPABASE_SERVICE_ROLE_KEY — 2026-02-27
 
+### Phase 7 — i18n, Email, UX Polish
+- [x] i18n: next-intl installed and configured (no i18n routing — locale stored in cookie) — 2026-02-27
+- [x] i18n: translation files for EN, FR, ES, IT (`messages/*.json`) — 2026-02-27
+- [x] i18n: `src/i18n/request.ts` (server locale resolution), `src/i18n/locales.ts` (shared constants) — 2026-02-27
+- [x] i18n: `NextIntlClientProvider` in root layout, server action `setLocale` for switching — 2026-02-27
+- [x] i18n: Settings language dropdown wired to actual locale switching with page refresh — 2026-02-27
+- [x] Email: Resend + @react-email/components installed — 2026-02-27
+- [x] Email: Welcome email template (`src/components/emails/welcome-email.tsx`) — 2026-02-27
+- [x] Email: Generation complete email template (`src/components/emails/generation-complete-email.tsx`) — 2026-02-27
+- [x] Email: Invite email template (`src/components/emails/invite-email.tsx`) — 2026-02-27
+- [x] Email: Send functions (`src/lib/email/send-*.ts`) — fire-and-forget pattern — 2026-02-27
+- [x] Email: Welcome email wired into auth callback for new users — 2026-02-27
+- [x] Email: Invite email wired into POST /api/projects/[id]/shares — 2026-02-27
+- [x] Dashboard: Voice input via Web Speech API (SpeechRecognition) — 2026-02-27
+- [x] Dashboard: File attach button wired to file input (image upload → create project) — 2026-02-27
+- [x] Dashboard: Submit button added to prompt area — 2026-02-27
+- [x] TypeScript: Web Speech API type declarations (`src/types/speech.d.ts`) — 2026-02-27
+- [x] Fix: CORS — Poll endpoint now returns Supabase signed URL instead of raw Meshy CDN URL — 2026-02-27
+- [x] Fix: Dashboard prompt now auto-triggers generation in editor via sessionStorage handoff — 2026-02-27
+
 ## In Progress
 - (none)
 
@@ -155,7 +175,7 @@ Phase 6 — Final Features Before Launch
 - Zod validation added to all API routes. Schemas centralized in `src/lib/api/validation.ts`.
 - All API errors use standardized `{ error, code, details }` format via `apiError()` helper.
 - Whop SDK (`@whop/sdk`) used for billing. `Whop` class (default export), not `WhopServerSdk`. Checkout via `checkoutConfigurations.create()`, webhook verification via `webhooks.unwrap()`.
-- Whop plan IDs are placeholders (`plan_STANDARD_MONTHLY` etc.) — must be replaced with actual IDs from Whop dashboard before launch.
+- Whop plan IDs updated with real IDs from Whop dashboard (Standard: plan_fRhaBzPCv7VO3/plan_tI2nKFluSA2FQ, Pro: plan_bX1vGvaf1VZ9J/plan_oCnzubavDuejn, Mega: plan_CZwBm3Cti4ege/plan_syiJyvcdDWPrl).
 - Whop webhook handler uses Supabase service role client (no user context available in webhooks).
 - Export supports GLB (GLTFExporter), OBJ (OBJExporter), STL (STLExporter). FBX deferred — no reliable client-side exporter.
 - Non-primitive models loaded during export via GLTFLoader.parse() from `obj.metadata.modelUrl` signed URLs.

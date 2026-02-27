@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useEditorStore } from "@/store/editor-store";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -42,24 +42,50 @@ export function SceneRenderer() {
         const isSelected = obj.id === selectedObjectId;
 
         return (
-          <group
-            key={obj.id}
-            position={obj.transform.position}
-            rotation={new THREE.Euler(...obj.transform.rotation)}
-            scale={obj.transform.scale}
-            userData={{ objectId: obj.id }}
-          >
-            {isPrimitive(obj.assetId) ? (
-              <PrimitiveObject obj={obj} isSelected={isSelected} />
-            ) : (
-              <Suspense fallback={<LoadingPlaceholder />}>
-                <GLBObject obj={obj} isSelected={isSelected} />
-              </Suspense>
-            )}
-          </group>
+          <SceneObjectGroup key={obj.id} obj={obj} isSelected={isSelected} />
         );
       })}
     </>
+  );
+}
+
+/**
+ * Wraps each scene object in a group and imperatively syncs transforms.
+ * This avoids conflicts with TransformControls which mutates the Three.js
+ * object directly — declarative props would fight with it.
+ */
+function SceneObjectGroup({
+  obj,
+  isSelected,
+}: {
+  obj: SceneObject;
+  isSelected: boolean;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  // Imperatively sync transforms from store → Three.js object
+  // This works correctly even when TransformControls is attached
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    group.position.set(...obj.transform.position);
+    group.rotation.set(...obj.transform.rotation);
+    group.scale.set(...obj.transform.scale);
+  }, [obj.transform.position, obj.transform.rotation, obj.transform.scale]);
+
+  return (
+    <group
+      ref={groupRef}
+      userData={{ objectId: obj.id }}
+    >
+      {isPrimitive(obj.assetId) ? (
+        <PrimitiveObject obj={obj} isSelected={isSelected} />
+      ) : (
+        <Suspense fallback={<LoadingPlaceholder />}>
+          <GLBObject obj={obj} isSelected={isSelected} />
+        </Suspense>
+      )}
+    </group>
   );
 }
 
@@ -165,33 +191,77 @@ function GLBModelFromUrl({
 }) {
   const { scene } = useGLTF(url);
 
-  // Apply material overrides if any
-  const material = obj.materialOverrides[0];
-  if (material) {
+  // On first load, extract mesh names into metadata so AI knows about them
+  const meshNamesExtracted = useRef(false);
+  useEffect(() => {
+    if (meshNamesExtracted.current) return;
+    meshNamesExtracted.current = true;
+    const names: string[] = [];
     scene.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-        if (material.color) child.material.color.set(material.color);
-        if (material.metalness !== undefined) child.material.metalness = material.metalness;
-        if (material.roughness !== undefined) child.material.roughness = material.roughness;
-        if (material.opacity !== undefined) {
-          child.material.opacity = material.opacity;
-          child.material.transparent = material.opacity < 1;
+      if (child instanceof THREE.Mesh && child.name) {
+        names.push(child.name);
+      }
+    });
+    if (names.length > 0) {
+      const currentObj = useEditorStore.getState().scene.objects[obj.id];
+      if (currentObj && !currentObj.metadata?.meshNames) {
+        useEditorStore.setState((state) => {
+          const o = state.scene.objects[obj.id];
+          if (o) {
+            o.metadata = { ...o.metadata, meshNames: names };
+          }
+        });
+      }
+    }
+  }, [scene, obj.id]);
+
+  // Clone scene and apply material overrides + shadows
+  // Re-clones when overrides change so we never mutate the cached original
+  const cloned = useMemo(() => {
+    const clone = scene.clone();
+
+    // Build lookup: meshName → override, plus a fallback for unnamed (global) overrides
+    const byMeshName = new Map<string, typeof obj.materialOverrides[0]>();
+    let globalOverride: typeof obj.materialOverrides[0] | null = null;
+
+    for (const override of obj.materialOverrides) {
+      if (override.meshName) {
+        byMeshName.set(override.meshName, override);
+      } else {
+        globalOverride = override;
+      }
+    }
+
+    clone.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+      // Find the most specific override: meshName match first, then global fallback
+      const override = byMeshName.get(child.name) ?? globalOverride;
+      if (!override) return;
+
+      // Clone material to avoid mutating the cached original
+      if (child.material instanceof THREE.MeshStandardMaterial) {
+        child.material = child.material.clone();
+        if (override.color) child.material.color.set(override.color);
+        if (override.metalness !== undefined) child.material.metalness = override.metalness;
+        if (override.roughness !== undefined) child.material.roughness = override.roughness;
+        if (override.opacity !== undefined) {
+          child.material.opacity = override.opacity;
+          child.material.transparent = override.opacity < 1;
         }
       }
     });
-  }
 
-  // Enable shadows
-  scene.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
+    return clone;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, obj.materialOverrides]);
 
   return (
     <>
-      <primitive object={scene.clone()} />
+      <primitive object={cloned} />
       {isSelected && (
         <SelectionOverlay scene={scene} />
       )}

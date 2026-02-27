@@ -1,8 +1,9 @@
 "use client";
 
 import { useEditorStore } from "@/store/editor-store";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExportFormat } from "@/lib/three/export-scene";
+import type { EditorAction } from "@/types/actions";
 import { SharingModal } from "@/components/editor/sharing-modal";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,71 @@ function ExpandIcon() {
 }
 
 // ---------------------------------------------------------------------------
+// Transform input cell — uses local state to avoid reformatting while typing
+// ---------------------------------------------------------------------------
+
+function TransformCell({
+  axis,
+  value,
+  onChange,
+  step = 0.1,
+}: {
+  axis: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
+  const [local, setLocal] = useState(fmt(value));
+  const focusedRef = useRef(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Sync from store when not focused
+  useEffect(() => {
+    if (!focusedRef.current) setLocal(fmt(value));
+  }, [value]);
+
+  return (
+    <div
+      className="flex flex-1 items-center rounded-[8px] bg-white/[0.03] px-2"
+      style={{ height: 24, minWidth: 0, maxWidth: 67 }}
+    >
+      <span className="mr-1 font-[family-name:var(--font-spline-sans)] text-[11px] font-medium text-[#10B981] tracking-[0.3px]">
+        {axis}
+      </span>
+      <input
+        type="text"
+        value={local}
+        onFocus={() => { focusedRef.current = true; }}
+        onBlur={() => {
+          focusedRef.current = false;
+          const parsed = parseFloat(local);
+          if (!Number.isNaN(parsed)) {
+            onChange(parsed);
+          } else {
+            setLocal(fmt(valueRef.current));
+          }
+        }}
+        onChange={(e) => setLocal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const parsed = parseFloat(local);
+            if (!Number.isNaN(parsed)) {
+              onChange(parsed);
+              // Blur after committing so the effect will sync
+              (e.target as HTMLInputElement).blur();
+            }
+          }
+          if (e.key === "ArrowUp") { e.preventDefault(); onChange(valueRef.current + step); }
+          if (e.key === "ArrowDown") { e.preventDefault(); onChange(valueRef.current - step); }
+        }}
+        className="w-full bg-transparent font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 tracking-[0.3px] outline-none"
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Transform input row
 // ---------------------------------------------------------------------------
 
@@ -111,11 +177,13 @@ function TransformRow({
   values,
   axes,
   onChange,
+  step,
 }: {
   label: string;
   values: number[];
   axes: string[];
   onChange: (idx: number, value: number) => void;
+  step?: number;
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-[3px]">
@@ -124,24 +192,13 @@ function TransformRow({
       </span>
       <div className="flex flex-1 items-center gap-1.5">
         {values.map((v, i) => (
-          <div
+          <TransformCell
             key={axes[i]}
-            className="flex flex-1 items-center rounded-[8px] bg-white/[0.03] px-2"
-            style={{ height: 24, minWidth: 0, maxWidth: 67 }}
-          >
-            <span className="mr-1 font-[family-name:var(--font-spline-sans)] text-[11px] font-medium text-[#10B981] tracking-[0.3px]">
-              {axes[i]}
-            </span>
-            <input
-              type="text"
-              value={fmt(v)}
-              onChange={(e) => {
-                const parsed = parseFloat(e.target.value);
-                if (!Number.isNaN(parsed)) onChange(i, parsed);
-              }}
-              className="w-full bg-transparent font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 tracking-[0.3px] outline-none"
-            />
-          </div>
+            axis={axes[i]}
+            value={v}
+            onChange={(newVal) => onChange(i, newVal)}
+            step={step}
+          />
         ))}
       </div>
     </div>
@@ -155,26 +212,159 @@ function TransformRow({
 function AssetSection({
   label,
   children,
+  defaultExpanded = false,
+  onAdd,
 }: {
   label: string;
   children?: React.ReactNode;
+  defaultExpanded?: boolean;
+  onAdd?: () => void;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   return (
     <div>
-      <SectionHeader
-        label={label}
-        actions={
-          <>
+      <div className="flex items-center justify-between px-3 py-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 transition-opacity hover:opacity-80"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="opacity-50"
+            style={{
+              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 150ms ease",
+            }}
+          >
+            <path
+              d="M6 4L10 8L6 12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="font-[family-name:var(--font-spline-sans)] text-[11px] font-medium text-white/[0.92]">
+            {label}
+          </span>
+        </button>
+        <div className="flex items-center gap-1">
+          {onAdd && (
             <SmallIconButton>
-              <DotsIcon />
+              <button onClick={onAdd}><PlusIcon /></button>
             </SmallIconButton>
-            <SmallIconButton>
-              <PlusIcon />
-            </SmallIconButton>
-          </>
+          )}
+        </div>
+      </div>
+      {expanded && children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BG Color hex input — local state to avoid cursor issues
+// ---------------------------------------------------------------------------
+
+function BgColorHexInput({
+  bgColor,
+  dispatch,
+}: {
+  bgColor: string;
+  dispatch: (action: EditorAction) => void;
+}) {
+  const [local, setLocal] = useState(stripHash(bgColor));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setLocal(stripHash(bgColor));
+  }, [bgColor, focused]);
+
+  return (
+    <input
+      type="text"
+      value={local}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        const hex = local.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+        if (hex.length === 6) {
+          dispatch({
+            type: "UPDATE_ENVIRONMENT",
+            environment: { backgroundColor: `#${hex}` },
+          });
+        } else {
+          setLocal(stripHash(bgColor));
         }
-      />
-      {children}
+      }}
+      onChange={(e) => setLocal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      maxLength={6}
+      className="w-full bg-transparent font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 outline-none"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Editable color asset row — click swatch to pick, updates material
+// ---------------------------------------------------------------------------
+
+function ColorAssetRow({
+  hex,
+  objectName,
+  objectId,
+  materialIndex,
+}: {
+  hex: string;
+  objectName: string;
+  objectId: string;
+  materialIndex: number;
+}) {
+  const dispatch = useEditorStore((s) => s.dispatch);
+  const objects = useEditorStore((s) => s.scene.objects);
+  const obj = objects[objectId];
+
+  return (
+    <div className="flex h-8 items-center gap-2 rounded-[8px] bg-white/[0.05] px-2">
+      {/* Clickable color swatch with native picker */}
+      <div className="relative h-4 w-4 shrink-0">
+        <div
+          className="h-4 w-4 rounded-[4px]"
+          style={{ backgroundColor: hex }}
+        />
+        <input
+          type="color"
+          value={hex}
+          onChange={(e) => {
+            if (!obj) return;
+            const mat = obj.materialOverrides[materialIndex] ?? {
+              materialIndex,
+              color: hex,
+              roughness: 0.5,
+              metalness: 0,
+              opacity: 1,
+            };
+            dispatch({
+              type: "UPDATE_MATERIAL",
+              id: objectId,
+              overrides: [{ ...mat, color: e.target.value }],
+            });
+          }}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          title={`Change color for ${objectName}`}
+        />
+      </div>
+      <span className="flex-1 truncate font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70">
+        {objectName}
+      </span>
+      <span className="shrink-0 font-[family-name:var(--font-spline-sans)] text-[10px] text-white/40">
+        {hex}
+      </span>
     </div>
   );
 }
@@ -257,20 +447,33 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
   // --- Dynamic color assets from scene objects' materials ------------------
 
   const colorAssets = useMemo(() => {
-    const colors = new Map<string, string>(); // hex → name
+    const result: { hex: string; name: string; objectId: string; materialIndex: number }[] = [];
+    const seen = new Set<string>();
     for (const obj of Object.values(scene.objects)) {
       if (obj.materialOverrides) {
         for (const mat of obj.materialOverrides) {
-          if (mat.color && !colors.has(mat.color)) {
-            colors.set(mat.color, obj.name);
+          const key = `${obj.id}:${mat.materialIndex}`;
+          if (mat.color && !seen.has(key)) {
+            seen.add(key);
+            result.push({ hex: mat.color, name: obj.name, objectId: obj.id, materialIndex: mat.materialIndex });
           }
         }
       }
     }
-    if (colors.size === 0) {
-      colors.set("#808080", "Default Color");
+    return result;
+  }, [scene.objects]);
+
+  // --- Image assets (generated models with thumbnails) -------------------
+
+  const imageAssets = useMemo(() => {
+    const result: { id: string; name: string; thumbnailUrl?: string }[] = [];
+    for (const obj of Object.values(scene.objects)) {
+      const thumb = obj.metadata?.thumbnailUrl as string | undefined;
+      if (thumb) {
+        result.push({ id: obj.id, name: obj.name, thumbnailUrl: thumb });
+      }
     }
-    return Array.from(colors.entries()).map(([hex, name]) => ({ hex, name }));
+    return result;
   }, [scene.objects]);
 
   // -------------------------------------------------------------------------
@@ -279,8 +482,8 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
 
   return (
     <div
-      className="fixed right-4 top-4 z-50 flex w-[230px] flex-col rounded-[20px] border border-white/[0.15] bg-[#1F1F18]"
-      style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}
+      className="fixed right-4 top-4 bottom-4 z-50 flex w-[230px] flex-col rounded-[20px] border border-white/[0.15] bg-[#1F1F18]"
+      style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", maxHeight: "calc(100vh - 32px)" }}
     >
       {/* ----------------------------------------------------------------- */}
       {/* Top button row                                                    */}
@@ -365,30 +568,31 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
             <span className="shrink-0 font-[family-name:var(--font-spline-sans)] text-[11px] text-white/[0.52]">
               BG Color
             </span>
-            {/* Color swatch */}
-            <div
-              className="h-6 w-6 shrink-0 rounded-[8px]"
-              style={{
-                backgroundColor: bgColor,
-                boxShadow: "inset 0px 0px 0px 1px rgba(255,255,255,0.05)",
-              }}
-            />
+            {/* Color swatch — click to open native picker */}
+            <div className="relative h-6 w-6 shrink-0">
+              <div
+                className="h-6 w-6 rounded-[8px]"
+                style={{
+                  backgroundColor: bgColor,
+                  boxShadow: "inset 0px 0px 0px 1px rgba(255,255,255,0.05)",
+                }}
+              />
+              <input
+                type="color"
+                value={bgColor}
+                onChange={(e) => {
+                  dispatch({
+                    type: "UPDATE_ENVIRONMENT",
+                    environment: { backgroundColor: e.target.value },
+                  });
+                }}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                title="Pick background color"
+              />
+            </div>
             {/* Hex input */}
             <div className="flex h-6 flex-1 items-center rounded-[8px] bg-white/[0.05] px-2">
-              <input
-                type="text"
-                value={stripHash(bgColor)}
-                onChange={(e) => {
-                  const hex = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
-                  if (hex.length === 6) {
-                    dispatch({
-                      type: "UPDATE_ENVIRONMENT",
-                      environment: { backgroundColor: `#${hex}` },
-                    });
-                  }
-                }}
-                className="w-full bg-transparent font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 outline-none"
-              />
+              <BgColorHexInput bgColor={bgColor} dispatch={dispatch} />
             </div>
             {/* Opacity display */}
             <div className="flex h-6 w-[42px] shrink-0 items-center justify-center rounded-[8px] bg-white/[0.05]">
@@ -435,22 +639,23 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
         <div className="mx-3 border-t border-white/[0.06]" />
 
         {/* ----- Color Assets section ----- */}
-        <AssetSection label="Color Assets">
+        <AssetSection label="Color Assets" defaultExpanded={colorAssets.length > 0}>
           <div className="flex flex-col gap-1 px-3 pb-2">
-            {colorAssets.map(({ hex, name }) => (
-              <div
-                key={hex}
-                className="flex h-8 items-center gap-2 rounded-[8px] bg-white/[0.05] px-2"
-              >
-                <div
-                  className="h-4 w-4 shrink-0 rounded-[4px]"
-                  style={{ backgroundColor: hex }}
+            {colorAssets.length > 0 ? (
+              colorAssets.map((asset) => (
+                <ColorAssetRow
+                  key={`${asset.objectId}:${asset.materialIndex}`}
+                  hex={asset.hex}
+                  objectName={asset.name}
+                  objectId={asset.objectId}
+                  materialIndex={asset.materialIndex}
                 />
-                <span className="font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70">
-                  {name}
-                </span>
-              </div>
-            ))}
+              ))
+            ) : (
+              <span className="py-2 text-center font-[family-name:var(--font-spline-sans)] text-[10px] text-white/30">
+                No colors in scene
+              </span>
+            )}
           </div>
         </AssetSection>
 
@@ -458,19 +663,67 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
         <div className="mx-3 border-t border-white/[0.06]" />
 
         {/* ----- Image Assets section ----- */}
-        <AssetSection label="Image Assets" />
+        <AssetSection label="Image Assets" defaultExpanded={imageAssets.length > 0}>
+          <div className="flex flex-col gap-1 px-3 pb-2">
+            {imageAssets.length > 0 ? (
+              imageAssets.map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => dispatch({ type: "SELECT_OBJECT", id: asset.id })}
+                  className="flex h-10 w-full items-center gap-2 rounded-[8px] bg-white/[0.05] px-2 text-left transition-colors hover:bg-white/[0.08]"
+                >
+                  {asset.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={asset.thumbnailUrl}
+                      alt={asset.name}
+                      className="h-7 w-7 shrink-0 rounded-[4px] object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] bg-white/[0.06]">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="1" y="1" width="12" height="12" rx="2" stroke="white" strokeOpacity="0.2" strokeWidth="1" />
+                        <circle cx="5" cy="5" r="1.5" fill="white" fillOpacity="0.2" />
+                        <path d="M1 10L4.5 6.5L7 9L9 7L13 11" stroke="white" strokeOpacity="0.2" strokeWidth="1" />
+                      </svg>
+                    </div>
+                  )}
+                  <span className="flex-1 truncate font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70">
+                    {asset.name}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <span className="py-2 text-center font-[family-name:var(--font-spline-sans)] text-[10px] text-white/30">
+                No images in scene
+              </span>
+            )}
+          </div>
+        </AssetSection>
 
         {/* Divider */}
         <div className="mx-3 border-t border-white/[0.06]" />
 
         {/* ----- Media Assets section ----- */}
-        <AssetSection label="Media Assets" />
+        <AssetSection label="Media Assets">
+          <div className="flex flex-col gap-1 px-3 pb-2">
+            <span className="py-2 text-center font-[family-name:var(--font-spline-sans)] text-[10px] text-white/30">
+              No media assets
+            </span>
+          </div>
+        </AssetSection>
 
         {/* Divider */}
         <div className="mx-3 border-t border-white/[0.06]" />
 
         {/* ----- Audio Assets section ----- */}
-        <AssetSection label="Audio Assets" />
+        <AssetSection label="Audio Assets">
+          <div className="flex flex-col gap-1 px-3 pb-2">
+            <span className="py-2 text-center font-[family-name:var(--font-spline-sans)] text-[10px] text-white/30">
+              No audio assets
+            </span>
+          </div>
+        </AssetSection>
       </div>
 
       {/* Sharing Modal */}

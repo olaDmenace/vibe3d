@@ -34,6 +34,8 @@ export type Transform = {
 /** Override a specific material on the loaded model */
 export type MaterialOverride = {
   materialIndex: number;
+  /** Optional mesh name to target a specific mesh child in a GLB model */
+  meshName?: string;
   color?: string;
   roughness?: number; // 0-1
   metalness?: number; // 0-1
