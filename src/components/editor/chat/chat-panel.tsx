@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useEditorStore } from "@/store/editor-store";
+import { useGenerationStore } from "@/store/generation-store";
 import { createClient } from "@/lib/supabase/client";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import type { EditorAction } from "@/types/actions";
@@ -22,6 +23,24 @@ interface GenerationJob {
   error?: string;
 }
 
+/** Clean a generation prompt into a proper object name */
+function cleanPromptForName(prompt: string): string {
+  return (
+    prompt
+      // Remove common generation prefixes
+      .replace(/^(generate|create|make|build|spawn|add)\s+/i, "")
+      // Remove articles
+      .replace(/^(a|an|the|me a|me an)\s+/i, "")
+      // Remove "3d model of" type phrases
+      .replace(/^3d\s*(model\s*)?(of\s*)?/i, "")
+      // Capitalize first letter
+      .replace(/^./, (c) => c.toUpperCase())
+      // Truncate
+      .slice(0, 40)
+      .trim() || "Generated Model"
+  );
+}
+
 export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: string; isAuthenticated?: boolean }) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -32,8 +51,12 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // One-shot gate to prevent duplicate handling of completed generations
+  const generationHandledRef = useRef(false);
+  // Ref to hold the current poll timeout so we can cancel it
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dispatch = useEditorStore((s) => s.dispatch);
   const supabase = createClient();
@@ -52,7 +75,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       .catch(() => {});
   }, [projectId]);
 
-  // Ref for auto-trigger (must be declared before pollGeneration for the effect below)
+  // Ref for auto-trigger
   const autoTriggeredRef = useRef(false);
 
   // Scroll to bottom when messages change
@@ -63,79 +86,129 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
   // Clean up polling on unmount
   useEffect(() => {
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
     };
   }, []);
 
-  // Poll generation status
+  // Poll generation status using chained setTimeout (not setInterval)
   const pollGeneration = useCallback(
     (taskId: string, prompt: string) => {
       if (!projectId) return;
-      if (pollRef.current) clearInterval(pollRef.current);
 
-      pollRef.current = setInterval(async () => {
+      // Reset the one-shot gate for this new generation
+      generationHandledRef.current = false;
+
+      // Cancel any existing poll chain
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+
+      async function poll() {
+        // Already handled — don't poll again
+        if (generationHandledRef.current) return;
+
         try {
           const res = await fetch(
             `/api/projects/${projectId}/generate/${taskId}?prompt=${encodeURIComponent(prompt)}`
           );
           const data = await res.json();
 
+          // Already handled by a concurrent callback — bail
+          if (generationHandledRef.current) return;
+
+          if (data.status === "complete") {
+            // Gate: prevent re-entry from any concurrent poll
+            generationHandledRef.current = true;
+
+            // Add the model to the scene
+            const objId = crypto.randomUUID();
+            dispatch({
+              type: "ADD_OBJECT",
+              id: objId,
+              payload: {
+                name: cleanPromptForName(prompt),
+                parentId: null,
+                assetId: `generated:${taskId}`,
+                visible: true,
+                locked: false,
+                transform: {
+                  position: [0, 0, 0],
+                  rotation: [0, 0, 0],
+                  scale: [1, 1, 1],
+                },
+                materialOverrides: [],
+                metadata: {
+                  generationTaskId: taskId,
+                  thumbnailUrl: data.thumbnailUrl,
+                  modelUrl: data.modelUrl,
+                },
+              },
+            });
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `3D model "${cleanPromptForName(prompt)}" has been generated and added to your scene.`,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+
+            setGenerationJob(null);
+            useGenerationStore.getState().clearGeneration();
+
+            // Browser push notification
+            notify(`3D model ready`, {
+              body: `"${cleanPromptForName(prompt)}" has been generated and added to your scene.`,
+              tag: `generation-${taskId}`,
+            });
+
+            return; // don't schedule next poll
+          }
+
+          if (data.status === "failed") {
+            generationHandledRef.current = true;
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Generation failed: ${data.error || "Unknown error"}. Please try again.`,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+
+            setGenerationJob(null);
+            useGenerationStore.getState().clearGeneration();
+
+            return; // don't schedule next poll
+          }
+
+          // Still pending/processing — update progress and schedule next poll
+          if (data.progress !== undefined) {
+            useGenerationStore.getState().setProgress(data.progress);
+          }
+
           setGenerationJob((prev) =>
             prev?.taskId === taskId
-              ? { ...prev, status: data.status, progress: data.progress, error: data.error }
+              ? { ...prev, status: data.status, progress: data.progress ?? prev.progress, error: data.error }
               : prev
           );
 
-          if (data.status === "complete" || data.status === "failed") {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-
-            if (data.status === "complete") {
-              // Add the model to the scene
-              const objId = crypto.randomUUID();
-              dispatch({
-                type: "ADD_OBJECT",
-                id: objId,
-                payload: {
-                  name: prompt.slice(0, 40),
-                  parentId: null,
-                  assetId: `generated:${taskId}`,
-                  visible: true,
-                  locked: false,
-                  transform: {
-                    position: [0, 0, 0],
-                    rotation: [0, 0, 0],
-                    scale: [1, 1, 1],
-                  },
-                  materialOverrides: [],
-                  metadata: {
-                    generationTaskId: taskId,
-                    thumbnailUrl: data.thumbnailUrl,
-                    modelUrl: data.modelUrl,
-                  },
-                },
-              });
-
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: `3D model "${prompt}" has been generated and added to your scene.`,
-                  timestamp: new Date().toISOString(),
-                },
-              ]);
-
-              // Browser push notification
-              notify(`3D model ready`, {
-                body: `"${prompt}" has been generated and added to your scene.`,
-                tag: `generation-${taskId}`,
-              });
-            }
+          if (!generationHandledRef.current) {
+            pollTimeoutRef.current = setTimeout(poll, 3000);
           }
         } catch {
-          // Polling failure — will retry on next interval
+          // Polling failure — retry unless already handled
+          if (!generationHandledRef.current) {
+            pollTimeoutRef.current = setTimeout(poll, 3000);
+          }
         }
-      }, 3000);
+      }
+
+      // Start first poll after a short delay
+      pollTimeoutRef.current = setTimeout(poll, 3000);
     },
     [projectId, dispatch, notify]
   );
@@ -148,6 +221,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
 
     autoTriggeredRef.current = true;
     sessionStorage.removeItem("vibe3d-pending-prompt");
+
+    // Show loading overlay immediately before API call returns
+    useGenerationStore.getState().setGenerating(pendingPrompt);
 
     // Auto-submit the generation
     (async () => {
@@ -168,6 +244,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const data = await res.json();
 
         if (!res.ok) {
+          useGenerationStore.getState().clearGeneration();
           const errorMsg = data.upgrade
             ? `Generation limit reached (${data.used}/${data.limit}). Upgrade your plan.`
             : data.error || "Generation failed";
@@ -176,12 +253,13 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             { role: "assistant", content: errorMsg, timestamp: new Date().toISOString() },
           ]);
         } else if (data.cached) {
+          useGenerationStore.getState().clearGeneration();
           const objId = crypto.randomUUID();
           dispatch({
             type: "ADD_OBJECT",
             id: objId,
             payload: {
-              name: pendingPrompt.slice(0, 40),
+              name: cleanPromptForName(pendingPrompt),
               parentId: null,
               assetId: data.asset.id,
               visible: true,
@@ -193,17 +271,18 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           });
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Found a cached model for "${pendingPrompt}" and added it to your scene.`, timestamp: new Date().toISOString() },
+            { role: "assistant", content: `Found a cached model for "${cleanPromptForName(pendingPrompt)}" and added it to your scene.`, timestamp: new Date().toISOString() },
           ]);
         } else {
           setGenerationJob({ taskId: data.taskId, prompt: pendingPrompt, status: "pending", progress: 0 });
           pollGeneration(data.taskId, pendingPrompt);
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Generating 3D model for "${pendingPrompt}"... This may take a minute.`, timestamp: new Date().toISOString() },
+            { role: "assistant", content: `Generating 3D model for "${cleanPromptForName(pendingPrompt)}"... This may take a minute.`, timestamp: new Date().toISOString() },
           ]);
         }
       } catch {
+        useGenerationStore.getState().clearGeneration();
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Failed to start generation. Please try again.", timestamp: new Date().toISOString() },
@@ -244,6 +323,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       };
       setMessages((prev) => [...prev, userMsg]);
 
+      // Show loading overlay
+      useGenerationStore.getState().setGenerating("Image-to-3D");
+
       // Call generate with imageUrl
       const res = await fetch(`/api/projects/${projectId}/generate`, {
         method: "POST",
@@ -253,6 +335,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       const data = await res.json();
 
       if (!res.ok) {
+        useGenerationStore.getState().clearGeneration();
         const errorMsg = data.upgrade
           ? `Generation limit reached (${data.used}/${data.limit}). Upgrade your plan.`
           : data.error || "Generation failed";
@@ -261,6 +344,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           { role: "assistant", content: errorMsg, timestamp: new Date().toISOString() },
         ]);
       } else if (data.cached) {
+        useGenerationStore.getState().clearGeneration();
         const objId = crypto.randomUUID();
         dispatch({
           type: "ADD_OBJECT",
@@ -290,6 +374,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       }
     } catch (err) {
       console.error("Image upload failed:", err);
+      useGenerationStore.getState().clearGeneration();
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Failed to process image. Please try again.", timestamp: new Date().toISOString() },
@@ -321,6 +406,10 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
 
     if (genMatch) {
       const genPrompt = genMatch[1].trim();
+
+      // Show loading overlay immediately
+      useGenerationStore.getState().setGenerating(genPrompt);
+
       try {
         const res = await fetch(`/api/projects/${projectId}/generate`, {
           method: "POST",
@@ -330,6 +419,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const data = await res.json();
 
         if (!res.ok) {
+          useGenerationStore.getState().clearGeneration();
           const errorMsg =
             data.upgrade
               ? `You've reached your generation limit (${data.used}/${data.limit}). Upgrade your plan for more.`
@@ -340,12 +430,13 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           ]);
         } else if (data.cached) {
           // Cached result — add to scene immediately
+          useGenerationStore.getState().clearGeneration();
           const objId = crypto.randomUUID();
           dispatch({
             type: "ADD_OBJECT",
             id: objId,
             payload: {
-              name: genPrompt.slice(0, 40),
+              name: cleanPromptForName(genPrompt),
               parentId: null,
               assetId: data.asset.id,
               visible: true,
@@ -363,7 +454,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             ...prev,
             {
               role: "assistant",
-              content: `Found a cached model for "${genPrompt}" and added it to your scene.`,
+              content: `Found a cached model for "${cleanPromptForName(genPrompt)}" and added it to your scene.`,
               timestamp: new Date().toISOString(),
             },
           ]);
@@ -380,12 +471,13 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             ...prev,
             {
               role: "assistant",
-              content: `Generating 3D model for "${genPrompt}"... This may take a minute.`,
+              content: `Generating 3D model for "${cleanPromptForName(genPrompt)}"... This may take a minute.`,
               timestamp: new Date().toISOString(),
             },
           ]);
         }
       } catch {
+        useGenerationStore.getState().clearGeneration();
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Failed to start generation. Please try again.", timestamp: new Date().toISOString() },

@@ -149,6 +149,14 @@ Phase 6 — Final Features Before Launch
 - [x] Fix: CORS — Poll endpoint now returns Supabase signed URL instead of raw Meshy CDN URL — 2026-02-27
 - [x] Fix: Dashboard prompt now auto-triggers generation in editor via sessionStorage handoff — 2026-02-27
 
+### Bug Fixes — Generation & UX — 2026-03-02
+- [x] Fixed: Generation polling adding model to scene multiple times — replaced setInterval with chained setTimeout + one-shot gate ref (`generationHandledRef`)
+- [x] Fixed: Object names from generation now cleaned via `cleanPromptForName()` ("Create a 3D chess Piece" → "Chess Piece")
+- [x] Generation loading overlay (`src/components/editor/viewport/generation-overlay.tsx`): spinner + prompt + progress bar shown over viewport during generation
+- [x] Generation store (`src/store/generation-store.ts`) for cross-component generation status sharing
+- [x] Dashboard → Editor handoff shows loading overlay immediately on editor mount (before API response)
+- [x] Generation progress from Meshy API polling fed into both overlay progress bar and chat progress bar
+
 ### Code Review Fixes & Improvements — 2026-03-02
 - [x] Fix 1: Transform coordinates — destructured array deps to individual numbers so Immer structural sharing doesn't skip useEffect updates
 - [x] Fix 2: SelectionOverlay — wrapped Box3/Vector3 computations in useMemo to avoid allocations every render
