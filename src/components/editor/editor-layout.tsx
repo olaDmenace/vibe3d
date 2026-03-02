@@ -6,6 +6,7 @@ import { ChatPanel } from "./chat/chat-panel";
 import { LeftSidebar } from "./panels/left-sidebar";
 import { RightSidebar } from "./panels/right-sidebar";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useAuthStatus } from "@/hooks/use-auth-status";
 import { EditorTour } from "./tour/editor-tour";
 
 type EditorLayoutProps = {
@@ -15,6 +16,7 @@ type EditorLayoutProps = {
 
 export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {}) {
   useKeyboardShortcuts();
+  const { isAuthenticated } = useAuthStatus();
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#262624]">
@@ -30,10 +32,14 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
       <RightSidebar projectId={projectId} />
 
       {/* Floating toolbar (absolute positioned) */}
-      <EditorToolbar projectId={projectId} projectName={projectName} />
+      <EditorToolbar
+        projectId={projectId}
+        projectName={projectName}
+        isAuthenticated={isAuthenticated}
+      />
 
       {/* Floating chat input (absolute positioned) */}
-      <ChatPanel projectId={projectId} />
+      <ChatPanel projectId={projectId} isAuthenticated={isAuthenticated} />
 
       {/* Guided tour overlay */}
       <EditorTour />

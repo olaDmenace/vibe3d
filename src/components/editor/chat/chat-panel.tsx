@@ -22,7 +22,7 @@ interface GenerationJob {
   error?: string;
 }
 
-export function ChatPanel({ projectId }: { projectId?: string }) {
+export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: string; isAuthenticated?: boolean }) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -210,7 +210,6 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
         ]);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, dispatch, pollGeneration]);
 
   const handleImageUpload = useCallback(async (file: File) => {
@@ -317,7 +316,7 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
 
     // Check if this is a generation request
     const genMatch = trimmed.match(
-      /^(?:generate|create|make|build)\s+(?:a\s+)?(?:3d\s+)?(?:model\s+(?:of\s+)?)?(.+)/i
+      /(?:^|\b)(?:generate|create|make|build|spawn|add)\s+(?:a\s+|an\s+|me\s+(?:a\s+|an\s+)?|3d\s+(?:model\s+)?(?:of\s+)?)?(.+)/i
     );
 
     if (genMatch) {
@@ -398,10 +397,11 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
 
     // Regular chat message — send to AI
     try {
+      const currentScene = useEditorStore.getState().getSerializableState();
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, sceneState: currentScene }),
       });
       const data = await res.json();
 
@@ -633,8 +633,8 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Start creating..."
-              disabled={sending}
+              placeholder={isAuthenticated ? "Start creating..." : "Sign in to use AI chat"}
+              disabled={sending || !isAuthenticated}
               className="w-full h-full bg-transparent text-white/90 placeholder:text-white/40 outline-none resize-none disabled:opacity-50"
               style={{
                 fontFamily: "'Spline Sans', sans-serif",
@@ -644,6 +644,15 @@ export function ChatPanel({ projectId }: { projectId?: string }) {
                 paddingLeft: message.length === 0 ? 6 : 0,
               }}
             />
+            {!isAuthenticated && (
+              <a
+                href="/sign-in"
+                className="absolute bottom-2 left-4 text-[10px] underline"
+                style={{ color: "#7CC4F8", fontFamily: "'Spline Sans', sans-serif" }}
+              >
+                Sign in to use AI chat
+              </a>
+            )}
           </div>
 
           {/* Image upload preview */}

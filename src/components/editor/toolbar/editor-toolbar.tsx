@@ -33,11 +33,13 @@ const PRIMITIVES: { type: string; icon: React.ReactNode; label: string }[] = [
 type EditorToolbarProps = {
   projectId?: string;
   projectName?: string;
+  isAuthenticated?: boolean;
 };
 
 export function EditorToolbar({
   projectId,
   projectName,
+  isAuthenticated = true,
 }: EditorToolbarProps = {}) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -46,6 +48,8 @@ export function EditorToolbar({
   const addPrimitive = useCallback(
     (type: string) => {
       const id = crypto.randomUUID();
+      const objectCount = Object.keys(useEditorStore.getState().scene.objects).length;
+      const offset = objectCount * 1.5;
       dispatch({
         type: "ADD_OBJECT",
         id,
@@ -56,7 +60,7 @@ export function EditorToolbar({
           visible: true,
           locked: false,
           transform: {
-            position: [0, 0.5, 0],
+            position: [offset, 0.5, 0],
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
           },

@@ -4,6 +4,7 @@ import {
   generateFromText,
   generateFromImage,
   normalizePrompt,
+  expandPromptForGeneration,
 } from "@/lib/ai/generation-service";
 import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
 import { validateBody, generateSchema, apiError } from "@/lib/api/validation";
@@ -106,9 +107,12 @@ export async function POST(
 
   // ---- Start generation ----
   try {
+    // Expand short prompts for better generation quality;
+    // the original prompt is stored in the asset for cache matching
+    const expandedPrompt = expandPromptForGeneration(prompt);
     const result = imageUrl
       ? await generateFromImage(imageUrl, { provider: "meshy" })
-      : await generateFromText(prompt, { style, provider: "meshy" });
+      : await generateFromText(expandedPrompt, { style, provider: "meshy" });
 
     // Increment generation count
     await supabase

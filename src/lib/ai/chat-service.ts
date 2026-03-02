@@ -23,21 +23,94 @@ export interface ChatResult {
   actions: EditorAction[];
 }
 
+let _anthropicClient: Anthropic | null = null;
+
 function getAnthropicClient(): Anthropic {
+  if (_anthropicClient) return _anthropicClient;
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY environment variable is not set");
-  return new Anthropic({ apiKey: key });
+  _anthropicClient = new Anthropic({ apiKey: key });
+  return _anthropicClient;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Tool definition for structured action output                       */
+/* ------------------------------------------------------------------ */
+
+const EDITOR_ACTIONS_TOOL: Anthropic.Tool = {
+  name: "execute_editor_actions",
+  description:
+    "Execute one or more editor actions on the 3D scene. Call this whenever the user's request requires changing the scene.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      actions: {
+        type: "array",
+        description: "Array of EditorAction objects to dispatch",
+        items: {
+          type: "object",
+          properties: {
+            type: {
+              type: "string",
+              enum: [
+                "ADD_OBJECT",
+                "DELETE_OBJECT",
+                "DUPLICATE_OBJECT",
+                "TRANSFORM_OBJECT",
+                "UPDATE_MATERIAL",
+                "RENAME_OBJECT",
+                "SET_VISIBILITY",
+                "SET_LOCKED",
+                "UPDATE_LIGHTING",
+                "UPDATE_ENVIRONMENT",
+                "BATCH_ACTIONS",
+              ],
+            },
+          },
+          required: ["type"],
+        },
+      },
+      explanation: {
+        type: "string",
+        description: "Brief natural-language explanation of what was done",
+      },
+    },
+    required: ["actions", "explanation"],
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/*  System prompt                                                      */
+/* ------------------------------------------------------------------ */
 
 /** Build a system prompt that includes the scene context */
 function buildSystemPrompt(scene: SceneState): string {
   const objectList = Object.values(scene.objects)
     .map((o) => {
       const meshNames = (o.metadata?.meshNames as string[] | undefined) ?? [];
-      const meshInfo = meshNames.length > 0
-        ? `, meshNames: [${meshNames.map((n) => `"${n}"`).join(", ")}]`
-        : "";
-      return `  - id: "${o.id}", name: "${o.name}", position: [${o.transform.position}], rotation: [${o.transform.rotation}], scale: [${o.transform.scale}], visible: ${o.visible}, locked: ${o.locked}${meshInfo}`;
+      const meshCount = meshNames.length;
+      const meshInfo =
+        meshCount >= 2
+          ? `meshCount: ${meshCount}, meshNames: [${meshNames.map((n) => `"${n}"`).join(", ")}]`
+          : `meshCount: ${meshCount} (single-mesh model)`;
+
+      // Show current material overrides
+      const overridesInfo =
+        o.materialOverrides.length > 0
+          ? `, materialOverrides: [${o.materialOverrides
+              .map((ov) => {
+                const parts: string[] = [`materialIndex: ${ov.materialIndex}`];
+                if (ov.meshName) parts.push(`meshName: "${ov.meshName}"`);
+                if (ov.color) parts.push(`color: "${ov.color}"`);
+                if (ov.roughness !== undefined) parts.push(`roughness: ${ov.roughness}`);
+                if (ov.metalness !== undefined) parts.push(`metalness: ${ov.metalness}`);
+                if (ov.opacity !== undefined) parts.push(`opacity: ${ov.opacity}`);
+                return `{ ${parts.join(", ")} }`;
+              })
+              .join(", ")}]`
+          : "";
+
+      return `  - id: "${o.id}", name: "${o.name}", position: [${o.transform.position}], rotation: [${o.transform.rotation}], scale: [${o.transform.scale}], visible: ${o.visible}, locked: ${o.locked}, ${meshInfo}${overridesInfo}`;
     })
     .join("\n");
 
@@ -58,7 +131,7 @@ Environment:
   - Grid: ${scene.environment.showGrid ? "visible" : "hidden"}, size=${scene.environment.gridSize}
 
 ## Your capabilities
-You can return actions in the following JSON format. Return a JSON array of actions wrapped in a <actions> tag.
+When the user's request requires scene changes, use the execute_editor_actions tool. For questions or conversation that don't require changes, respond normally without using the tool.
 
 Available action types:
 1. ADD_OBJECT: { type: "ADD_OBJECT", id: "<uuid>", payload: { name, parentId: null, assetId: "primitive:<type>", visible: true, locked: false, transform: { position: [x,y,z], rotation: [x,y,z], scale: [x,y,z] }, materialOverrides: [], metadata: {} } }
@@ -67,11 +140,6 @@ Available action types:
 3. DUPLICATE_OBJECT: { type: "DUPLICATE_OBJECT", sourceId: "<existing-id>", newId: "<uuid>" }
 4. TRANSFORM_OBJECT: { type: "TRANSFORM_OBJECT", id: "<existing-id>", transform: { position?: [x,y,z], rotation?: [x,y,z], scale?: [x,y,z] } }
 5. UPDATE_MATERIAL: { type: "UPDATE_MATERIAL", id: "<existing-id>", overrides: [{ materialIndex: 0, meshName?: "<mesh-name>", color?: "#hex", roughness?: 0-1, metalness?: 0-1, opacity?: 0-1 }] }
-   - When an object has MULTIPLE meshNames listed, use meshName to target specific parts (e.g. tires, body, windows). Each override with a meshName only affects that specific mesh.
-   - When an object has only ONE mesh (or no meshNames), do NOT use meshName — just use materialIndex: 0. The override applies to the whole model.
-   - If the user asks to change a specific part but the model only has one mesh, explain that the AI-generated model was created as a single mesh and individual parts cannot be recolored separately. Suggest regenerating the model or adding separate primitive objects.
-   - You can include multiple overrides in the array to target different parts simultaneously.
-   - Mesh names often contain descriptive keywords like "tire", "wheel", "body", "glass", "seat" etc. Match user intent to the closest mesh name.
 6. RENAME_OBJECT: { type: "RENAME_OBJECT", id: "<existing-id>", name: "<new-name>" }
 7. SET_VISIBILITY: { type: "SET_VISIBILITY", id: "<existing-id>", visible: true|false }
 8. SET_LOCKED: { type: "SET_LOCKED", id: "<existing-id>", locked: true|false }
@@ -79,12 +147,21 @@ Available action types:
 10. UPDATE_ENVIRONMENT: { type: "UPDATE_ENVIRONMENT", environment: { backgroundColor?: "#hex", showGrid?: boolean, gridSize?: number } }
 11. BATCH_ACTIONS: { type: "BATCH_ACTIONS", actions: [...] } — wrap multiple actions for atomic execution
 
-## Response format
-Always respond with:
-1. A brief natural-language explanation of what you're doing
-2. If changes are needed, include the actions in an <actions>[...]</actions> tag
+## CRITICAL: Material override rules based on meshCount
 
-If the user's request is a question or doesn't require scene changes, just answer normally without an <actions> tag.
+**If meshCount = 0 or meshCount = 1 (single-mesh model):**
+- The model was generated as ONE solid mesh with NO separable parts
+- MUST NOT use meshName in overrides — only materialIndex: 0
+- Any color/material change applies to the ENTIRE model
+- If the user asks to change a specific part (e.g. "make the tires black"), explain that this AI-generated model is a single mesh and individual parts cannot be recolored separately. Suggest regenerating the model or adding separate primitive objects.
+
+**If meshCount >= 2 (multi-mesh model):**
+- The model has separable parts that can be individually targeted
+- Use meshName to target specific parts (e.g. tires, body, windows)
+- Each override with a meshName only affects that specific mesh
+- You can include multiple overrides in the array to target different parts simultaneously
+- Mesh names often contain descriptive keywords like "tire", "wheel", "body", "glass", "seat" etc. Match user intent to the closest mesh name.
+- An override WITHOUT meshName (just materialIndex: 0) acts as a global fallback for meshes not specifically targeted
 
 ## Rules
 - Only reference object IDs that exist in the current scene, unless creating new objects
@@ -97,19 +174,9 @@ If the user's request is a question or doesn't require scene changes, just answe
 - Be concise in your explanations`;
 }
 
-/** Parse actions from the assistant's reply */
-function parseActionsFromReply(reply: string): EditorAction[] {
-  const match = reply.match(/<actions>([\s\S]*?)<\/actions>/);
-  if (!match) return [];
-
-  try {
-    const parsed = JSON.parse(match[1]);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as EditorAction[];
-  } catch {
-    return [];
-  }
-}
+/* ------------------------------------------------------------------ */
+/*  Validation                                                         */
+/* ------------------------------------------------------------------ */
 
 /** Validate that actions reference valid object IDs and have valid values */
 export function validateActions(
@@ -137,7 +204,26 @@ export function validateActions(
       case "RENAME_OBJECT":
       case "UPDATE_MATERIAL":
         if ("id" in action && objectIds.has(action.id)) {
-          valid.push(action);
+          // For UPDATE_MATERIAL, strip meshName for single-mesh models
+          if (action.type === "UPDATE_MATERIAL") {
+            const obj = scene.objects[action.id];
+            const meshNames = (obj?.metadata?.meshNames as string[] | undefined) ?? [];
+            if (meshNames.length <= 1) {
+              const cleaned = {
+                ...action,
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                overrides: action.overrides.map(({ meshName, ...rest }) => ({
+                  ...rest,
+                  materialIndex: 0,
+                })),
+              };
+              valid.push(cleaned);
+            } else {
+              valid.push(action);
+            }
+          } else {
+            valid.push(action);
+          }
         } else {
           errors.push(`${action.type}: object "${("id" in action && action.id) || "unknown"}" not found`);
         }
@@ -192,6 +278,10 @@ export function validateActions(
   return { valid, errors };
 }
 
+/* ------------------------------------------------------------------ */
+/*  Main chat function                                                 */
+/* ------------------------------------------------------------------ */
+
 /** Send a chat message and get back a reply + validated actions */
 export async function chat(
   userMessage: string,
@@ -216,27 +306,41 @@ export async function chat(
     max_tokens: 4096,
     system: buildSystemPrompt(scene),
     messages,
+    tools: [EDITOR_ACTIONS_TOOL],
   });
 
-  // Extract text content
-  const reply = response.content
+  // Extract text blocks as conversational reply
+  const textReply = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)
     .join("");
 
-  // Parse and validate actions
-  const rawActions = parseActionsFromReply(reply);
+  // Extract actions from tool_use blocks
+  let rawActions: EditorAction[] = [];
+  let toolExplanation = "";
+
+  const toolUseBlock = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+  );
+
+  if (toolUseBlock && toolUseBlock.name === "execute_editor_actions") {
+    const input = toolUseBlock.input as { actions: EditorAction[]; explanation: string };
+    rawActions = input.actions;
+    toolExplanation = input.explanation;
+  }
+
+  // Validate actions
   const { valid, errors } = validateActions(rawActions, scene);
 
   if (errors.length > 0) {
     console.warn("[chat-service] Action validation errors:", errors);
   }
 
-  // Clean the reply by removing the <actions> tag for display
-  const cleanReply = reply.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
+  // Build the reply: prefer text reply, fall back to tool explanation
+  const reply = textReply || toolExplanation || "Done.";
 
   return {
-    reply: cleanReply,
+    reply,
     actions: valid,
   };
 }

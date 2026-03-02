@@ -149,6 +149,22 @@ Phase 6 — Final Features Before Launch
 - [x] Fix: CORS — Poll endpoint now returns Supabase signed URL instead of raw Meshy CDN URL — 2026-02-27
 - [x] Fix: Dashboard prompt now auto-triggers generation in editor via sessionStorage handoff — 2026-02-27
 
+### Code Review Fixes & Improvements — 2026-03-02
+- [x] Fix 1: Transform coordinates — destructured array deps to individual numbers so Immer structural sharing doesn't skip useEffect updates
+- [x] Fix 2: SelectionOverlay — wrapped Box3/Vector3 computations in useMemo to avoid allocations every render
+- [x] Fix 4: Chat route accepts client-provided sceneState — avoids stale DB reads, falls back to DB if not provided
+- [x] Fix 5: Chat route — added soft-delete filter (`.is("deleted_at", null)`) and try/catch around Anthropic API with typed error responses (rate limit / timeout / generic → 503)
+- [x] Fix 6: Singleton Anthropic client — lazy module-level initialization instead of new instance per call
+- [x] Fix 7: AI system prompt — includes meshCount, current materialOverrides, CRITICAL section for single-mesh vs multi-mesh targeting rules
+- [x] Fix 8: Generation prompt expansion — `expandPromptForGeneration()` enriches short prompts with quality modifiers for better Meshy results
+- [x] Fix 9: Generate route uses expanded prompt for Meshy API but stores original for cache matching
+- [x] Fix 10: Generation detection regex — now matches "can you generate...", "I want to make...", "build me a...", etc.
+- [x] Fix 11: Auto-offset new primitives — X position offset based on object count so objects don't stack
+- [x] Fix 12+14: Command-based undo/redo — replaced full structuredClone snapshots with `{ forward, backward }` action pairs; computeInverseAction for all action types; maxHistorySize 50 (lightweight entries)
+- [x] Fix 13: Migrated AI chat from XML tag parsing to Anthropic tool_use — structured schema enforcement, removed parseActionsFromReply, added meshName stripping in validateActions for single-mesh models
+- [x] Fix 15: Per-user rate limiting on chat endpoint — in-memory Map, 30 messages/minute window, 429 response
+- [x] Fix 16: Unauthenticated editor mode — useAuthStatus hook, disabled chat input with sign-in link, EditorToolbar accepts isAuthenticated prop
+
 ## In Progress
 - (none)
 
@@ -166,8 +182,8 @@ Phase 6 — Final Features Before Launch
 - Supabase project ID: `ayhbxyyyzwutsjstradu`, region: `us-east-1`, org: `Kreos`.
 - Email auth uses magic link (OTP) rather than password — simpler UX, no password storage.
 - Auto-save uses `navigator.sendBeacon` on `beforeunload` for reliable save-on-close.
-- AI chat uses Claude claude-sonnet-4-6 for scene manipulation. System prompt includes full scene context + EditorAction schema.
-- AI actions are validated before dispatch: object ID existence, numeric bounds, material value clamping.
+- AI chat uses Claude claude-sonnet-4-6 for scene manipulation via tool_use (structured action output). System prompt includes full scene context + EditorAction schema.
+- AI actions are validated before dispatch: object ID existence, numeric bounds, meshName stripping for single-mesh models.
 - Generation prompt normalization (lowercase + trim + collapse whitespace) enables exact-match caching via `assets.ai_prompt`.
 - Billing cycle reset is checked on each generation request (monthly rolling window).
 - Chat history is stored in `ai_conversations` table, trimmed to last 100 messages.

@@ -17,6 +17,36 @@ export function normalizePrompt(prompt: string): string {
 }
 
 /**
+ * Expand a user's short prompt into a more detailed description
+ * that produces better results from text-to-3D generation APIs.
+ * Returns the enriched prompt for the API while preserving the
+ * original for caching and display.
+ */
+export function expandPromptForGeneration(prompt: string): string {
+  const lower = prompt.toLowerCase();
+
+  // Don't expand already detailed prompts (heuristic: > 60 chars or has adjectives)
+  if (prompt.length > 60) return prompt;
+
+  // Add 3D-specific quality modifiers
+  const suffixes: string[] = [];
+
+  // Add style hints if not already present
+  if (!lower.includes("high quality") && !lower.includes("detailed")) {
+    suffixes.push("high quality");
+  }
+  if (!lower.includes("3d model") && !lower.includes("3d render")) {
+    suffixes.push("3D model");
+  }
+  if (!lower.includes("clean geometry") && !lower.includes("topology")) {
+    suffixes.push("clean geometry");
+  }
+
+  if (suffixes.length === 0) return prompt;
+  return `${prompt}, ${suffixes.join(", ")}`;
+}
+
+/**
  * Provider registry. The first provider is the default.
  * Future: add TripoProvider, ReplicateProvider.
  */

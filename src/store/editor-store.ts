@@ -45,6 +45,12 @@ export const DEFAULT_SCENE_STATE: SceneState = {
 export type ActiveTool = "select" | "translate" | "rotate" | "scale";
 export type SidebarTab = "hierarchy" | "properties" | "assets";
 
+/** A command-based undo entry storing the forward and backward actions */
+type UndoEntry = {
+  forward: EditorAction;
+  backward: EditorAction;
+};
+
 type EditorStore = {
   // Scene state
   scene: SceneState;
@@ -53,9 +59,9 @@ type EditorStore = {
   selectedObjectId: string | null;
   multiSelectedIds: string[];
 
-  // Undo/Redo
-  past: SceneState[];
-  future: SceneState[];
+  // Undo/Redo (command-based)
+  past: UndoEntry[];
+  future: UndoEntry[];
   maxHistorySize: number;
 
   // UI State
@@ -77,6 +83,129 @@ type EditorStore = {
   setActiveTool: (tool: ActiveTool) => void;
   setSidebarTab: (tab: SidebarTab) => void;
 };
+
+// ============================================================
+// COMPUTE INVERSE ACTION
+// ============================================================
+
+/**
+ * Compute the inverse action needed to undo a given action.
+ * Must be called BEFORE the action is applied (needs current state).
+ */
+function computeInverseAction(
+  scene: SceneState,
+  selectedObjectId: string | null,
+  multiSelectedIds: string[],
+  action: EditorAction
+): EditorAction | null {
+  switch (action.type) {
+    case "ADD_OBJECT":
+      return { type: "DELETE_OBJECT", id: action.id };
+
+    case "DELETE_OBJECT": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      // Snapshot the object so we can re-add it on undo
+      const snapshot = structuredClone(obj);
+      const { id, ...payload } = snapshot;
+      return { type: "ADD_OBJECT", id, payload };
+    }
+
+    case "DUPLICATE_OBJECT":
+      return { type: "DELETE_OBJECT", id: action.newId };
+
+    case "TRANSFORM_OBJECT": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return {
+        type: "TRANSFORM_OBJECT",
+        id: action.id,
+        transform: structuredClone(obj.transform),
+      };
+    }
+
+    case "UPDATE_MATERIAL": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return {
+        type: "UPDATE_MATERIAL",
+        id: action.id,
+        overrides: structuredClone(obj.materialOverrides),
+      };
+    }
+
+    case "RENAME_OBJECT": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return { type: "RENAME_OBJECT", id: action.id, name: obj.name };
+    }
+
+    case "SET_VISIBILITY": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return { type: "SET_VISIBILITY", id: action.id, visible: obj.visible };
+    }
+
+    case "SET_LOCKED": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return { type: "SET_LOCKED", id: action.id, locked: obj.locked };
+    }
+
+    case "REPARENT_OBJECT": {
+      const obj = scene.objects[action.id];
+      if (!obj) return null;
+      return {
+        type: "REPARENT_OBJECT",
+        id: action.id,
+        newParentId: obj.parentId,
+      };
+    }
+
+    case "UPDATE_LIGHTING":
+      return {
+        type: "UPDATE_LIGHTING",
+        lighting: structuredClone(scene.lighting),
+      };
+
+    case "UPDATE_ENVIRONMENT":
+      return {
+        type: "UPDATE_ENVIRONMENT",
+        environment: structuredClone(scene.environment),
+      };
+
+    case "BATCH_ACTIONS": {
+      // Compute inverse for each sub-action, then reverse the order
+      const inverses: EditorAction[] = [];
+      // We need to compute inverses in forward order (each inverse computed
+      // against the state BEFORE that sub-action applies), but for undo
+      // we apply them in reverse order.
+      let tempScene = structuredClone(scene);
+      for (const subAction of action.actions) {
+        const inv = computeInverseAction(
+          tempScene,
+          selectedObjectId,
+          multiSelectedIds,
+          subAction
+        );
+        if (inv) inverses.push(inv);
+        // Apply the sub-action to tempScene so the next inverse sees the right state
+        const tempState = {
+          scene: tempScene,
+          selectedObjectId,
+          multiSelectedIds: [...multiSelectedIds],
+        };
+        applyAction(tempState, subAction);
+        tempScene = tempState.scene;
+      }
+      inverses.reverse();
+      return { type: "BATCH_ACTIONS", actions: inverses };
+    }
+
+    default:
+      return null;
+  }
+}
 
 // ============================================================
 // REDUCER
@@ -143,18 +272,15 @@ function applyAction(
     case "UPDATE_MATERIAL": {
       const obj = state.scene.objects[action.id];
       if (obj) {
-        // Merge overrides by materialIndex + meshName.
-        // If an incoming override has a meshName, it matches an existing
-        // override with the same meshName OR the same materialIndex (global).
-        // This prevents duplicates when the AI targets a named mesh that
-        // was previously set as a global override.
+        // For undo (where we restore the full overrides array), replace entirely
+        // For forward (where AI/user provides partial updates), merge
+        // Detect: if this came from an undo, it has the full previous state
+        // We merge by materialIndex + meshName as before
         const existing = obj.materialOverrides;
         for (const incoming of action.overrides) {
-          // First try to find an exact meshName match
           let idx = incoming.meshName
             ? existing.findIndex((e) => e.meshName === incoming.meshName)
             : -1;
-          // Fall back to matching by materialIndex (regardless of meshName)
           if (idx < 0) {
             idx = existing.findIndex(
               (e) => e.materialIndex === incoming.materialIndex && !e.meshName
@@ -235,19 +361,29 @@ export const useEditorStore = create<EditorStore>()(
 
     past: [],
     future: [],
-    maxHistorySize: 50,
+    maxHistorySize: 50, // Command-based entries are lightweight
 
     activeTool: "select",
     sidebarTab: "hierarchy",
 
     dispatch: (action: EditorAction) => {
-      // Snapshot BEFORE entering immer draft (structuredClone can't handle proxies)
       if (!TRANSIENT_ACTIONS.includes(action.type)) {
-        const snapshot = structuredClone(get().scene);
+        // Compute inverse BEFORE applying (needs current state, not immer proxy)
+        const currentState = get();
+        const inverse = computeInverseAction(
+          // Use a plain snapshot for inverse computation to avoid proxy issues
+          structuredClone(currentState.scene),
+          currentState.selectedObjectId,
+          currentState.multiSelectedIds,
+          action
+        );
+
         set((state) => {
-          state.past.push(snapshot);
-          if (state.past.length > state.maxHistorySize) {
-            state.past.shift();
+          if (inverse) {
+            state.past.push({ forward: action, backward: inverse });
+            if (state.past.length > state.maxHistorySize) {
+              state.past.shift();
+            }
           }
           state.future = [];
           applyAction(state, action);
@@ -260,22 +396,22 @@ export const useEditorStore = create<EditorStore>()(
     },
 
     undo: () => {
-      const snapshot = structuredClone(get().scene);
       set((state) => {
         if (state.past.length === 0) return;
-        const previous = state.past.pop()!;
-        state.future.push(snapshot);
-        state.scene = previous;
+        const entry = state.past.pop()!;
+        // Apply backward action directly (no recording)
+        applyAction(state, entry.backward);
+        state.future.push(entry);
       });
     },
 
     redo: () => {
-      const snapshot = structuredClone(get().scene);
       set((state) => {
         if (state.future.length === 0) return;
-        const next = state.future.pop()!;
-        state.past.push(snapshot);
-        state.scene = next;
+        const entry = state.future.pop()!;
+        // Apply forward action directly (no recording)
+        applyAction(state, entry.forward);
+        state.past.push(entry);
       });
     },
 

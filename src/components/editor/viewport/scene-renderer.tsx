@@ -63,15 +63,20 @@ function SceneObjectGroup({
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
-  // Imperatively sync transforms from store → Three.js object
-  // This works correctly even when TransformControls is attached
+  // Destructure transform arrays into individual numbers so React's
+  // Object.is() dependency check catches value changes even when
+  // Immer's structural sharing reuses the same array reference.
+  const [px, py, pz] = obj.transform.position;
+  const [rx, ry, rz] = obj.transform.rotation;
+  const [sx, sy, sz] = obj.transform.scale;
+
   useEffect(() => {
     const group = groupRef.current;
     if (!group) return;
-    group.position.set(...obj.transform.position);
-    group.rotation.set(...obj.transform.rotation);
-    group.scale.set(...obj.transform.scale);
-  }, [obj.transform.position, obj.transform.rotation, obj.transform.scale]);
+    group.position.set(px, py, pz);
+    group.rotation.set(rx, ry, rz);
+    group.scale.set(sx, sy, sz);
+  }, [px, py, pz, rx, ry, rz, sx, sy, sz]);
 
   return (
     <group
@@ -270,10 +275,12 @@ function GLBModelFromUrl({
 }
 
 function SelectionOverlay({ scene }: { scene: THREE.Object3D }) {
-  // Compute bounding box for wireframe selection indicator
-  const box = new THREE.Box3().setFromObject(scene);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
+  const { size, center } = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    const s = box.getSize(new THREE.Vector3());
+    const c = box.getCenter(new THREE.Vector3());
+    return { size: s, center: c };
+  }, [scene]);
 
   return (
     <mesh position={[center.x, center.y, center.z]}>
