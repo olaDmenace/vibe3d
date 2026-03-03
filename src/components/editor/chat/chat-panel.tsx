@@ -121,6 +121,10 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             // Gate: prevent re-entry from any concurrent poll
             generationHandledRef.current = true;
 
+            // Extract mesh segmentation info from response
+            const resMeshNames: string[] = data.meshNames ?? [];
+            const resMeshCount: number = data.meshCount ?? 0;
+
             // Add the model to the scene
             const objId = crypto.randomUUID();
             dispatch({
@@ -142,15 +146,22 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                   generationTaskId: taskId,
                   thumbnailUrl: data.thumbnailUrl,
                   modelUrl: data.modelUrl,
+                  meshNames: resMeshNames,
+                  meshCount: resMeshCount,
                 },
               },
             });
+
+            const meshInfo =
+              resMeshCount >= 2
+                ? ` It has ${resMeshCount} editable parts: ${resMeshNames.join(", ")}.`
+                : "";
 
             setMessages((prev) => [
               ...prev,
               {
                 role: "assistant",
-                content: `3D model "${cleanPromptForName(prompt)}" has been generated and added to your scene.`,
+                content: `3D model "${cleanPromptForName(prompt)}" has been generated and added to your scene.${meshInfo}`,
                 timestamp: new Date().toISOString(),
               },
             ]);

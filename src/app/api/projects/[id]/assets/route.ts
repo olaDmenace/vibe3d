@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { segmentMesh } from "@/lib/three/mesh-segmenter";
 
 const ALLOWED_MIME_TYPES: Record<string, string> = {
   "model/gltf-binary": "glb",
@@ -144,11 +145,42 @@ export async function POST(
   // Upload to Supabase Storage
   const assetId = crypto.randomUUID();
   const storagePath = `${user.id}/${projectId}/${assetId}.${format}`;
-  const buffer = await file.arrayBuffer();
+  const rawBuffer = await file.arrayBuffer();
+
+  // Run mesh segmentation for GLB uploads
+  let uploadBuffer: ArrayBuffer | Uint8Array = rawBuffer;
+  let meshMetadata: { meshNames: string[]; meshCount: number } | null = null;
+
+  if (format === "glb") {
+    try {
+      const promptHint = assetName
+        .replace(/\.glb$/i, "")
+        .replace(/[^a-zA-Z0-9 ]/g, "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .slice(0, 30) || "Upload";
+
+      const segResult = await segmentMesh(rawBuffer, promptHint);
+      uploadBuffer = segResult.buffer;
+      meshMetadata = {
+        meshNames: segResult.meshNames,
+        meshCount: segResult.meshCount,
+      };
+
+      if (segResult.wasSegmented) {
+        console.log(
+          `[assets] Segmented uploaded "${assetName}" into ${segResult.meshCount} parts`
+        );
+      }
+    } catch (segErr) {
+      console.warn("[assets] Segmentation failed for upload, using original:", segErr);
+      uploadBuffer = rawBuffer;
+    }
+  }
 
   const { error: uploadError } = await supabase.storage
     .from("assets")
-    .upload(storagePath, buffer, {
+    .upload(storagePath, uploadBuffer, {
       contentType: file.type || "application/octet-stream",
       upsert: false,
     });
@@ -158,6 +190,7 @@ export async function POST(
   }
 
   // Create asset record
+  const uploadSize = uploadBuffer instanceof Uint8Array ? uploadBuffer.byteLength : uploadBuffer.byteLength;
   const { data: asset, error: assetError } = await supabase
     .from("assets")
     .insert({
@@ -167,9 +200,10 @@ export async function POST(
       name: assetName,
       file_type: fileType,
       file_format: format,
-      file_size_bytes: file.size,
+      file_size_bytes: uploadSize,
       storage_path: storagePath,
       source: "uploaded",
+      ...(meshMetadata ? { metadata: meshMetadata } : {}),
     })
     .select()
     .single();

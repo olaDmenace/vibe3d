@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   checkGenerationStatus,
   downloadModel,
+  normalizePrompt,
 } from "@/lib/ai/generation-service";
-import { normalizePrompt } from "@/lib/ai/generation-service";
+import { segmentMesh } from "@/lib/three/mesh-segmenter";
 
 /* ------------------------------------------------------------------ */
 /*  GET /api/projects/[id]/generate/[jobId] — poll generation status  */
@@ -42,6 +43,8 @@ export async function GET(
 
   // If complete, download and store the model, then return a Supabase signed URL
   let signedModelUrl: string | null = null;
+  let meshNames: string[] = [];
+  let meshCount = 0;
 
   if (status.status === "complete" && status.modelUrl) {
     const storagePath = `${user.id}/${projectId}/${jobId}.glb`;
@@ -49,33 +52,70 @@ export async function GET(
     // Check if asset already exists for this task
     const { data: existing } = await supabase
       .from("assets")
-      .select("id, storage_path")
+      .select("id, storage_path, metadata")
       .eq("project_id", projectId)
       .eq("metadata->>taskId", jobId)
       .limit(1)
       .single();
 
-    if (!existing) {
+    if (existing) {
+      // Asset already stored — read mesh info from metadata
+      const meta = existing.metadata as Record<string, unknown> | null;
+      meshNames = (meta?.meshNames as string[]) ?? [];
+      meshCount = (meta?.meshCount as number) ?? 0;
+    } else {
       try {
         // Download the model from Meshy CDN (server-side, no CORS)
-        const { buffer, contentType } = await downloadModel(status.modelUrl);
+        const { buffer } = await downloadModel(status.modelUrl);
 
         // Get the prompt from the query string
         const url = new URL(request.url);
         const prompt = url.searchParams.get("prompt") ?? "ai-model";
 
-        // Upload to Supabase Storage
+        // --- Mesh segmentation ---
+        // Clean the prompt into a usable part-name prefix
+        const promptHint = prompt
+          .replace(/^(generate|create|make|build|spawn|add)\s+/i, "")
+          .replace(/^(a|an|the|me a|me an)\s+/i, "")
+          .replace(/^3d\s*(model\s*)?(of\s*)?/i, "")
+          .replace(/[^a-zA-Z0-9 ]/g, "")
+          .trim()
+          .replace(/\s+/g, "_")
+          .slice(0, 30) || "Model";
+
+        let finalBuffer: ArrayBuffer | Uint8Array = buffer;
+
+        try {
+          const segResult = await segmentMesh(buffer, promptHint);
+          finalBuffer = segResult.buffer;
+          meshNames = segResult.meshNames;
+          meshCount = segResult.meshCount;
+
+          if (segResult.wasSegmented) {
+            console.log(
+              `[generate] Segmented "${prompt}" into ${segResult.meshCount} parts: [${segResult.meshNames.join(", ")}]`
+            );
+          }
+        } catch (segErr) {
+          console.warn("[generate] Segmentation failed, using original model:", segErr);
+          // Fallback — use original buffer with no mesh info
+          finalBuffer = buffer;
+          meshNames = [promptHint];
+          meshCount = 1;
+        }
+
+        // Upload segmented (or original) model to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from("assets")
-          .upload(storagePath, buffer, {
-            contentType,
+          .upload(storagePath, finalBuffer, {
+            contentType: "model/gltf-binary",
             upsert: true,
           });
 
         if (uploadError) {
           console.error("[generate] Storage upload failed:", uploadError);
         } else {
-          // Create asset record
+          // Create asset record with mesh metadata
           const normalizedPrompt = normalizePrompt(prompt);
           await supabase.from("assets").insert({
             owner_id: user.id,
@@ -83,13 +123,15 @@ export async function GET(
             name: prompt.slice(0, 100),
             file_type: "model",
             file_format: "glb",
-            file_size_bytes: buffer.byteLength,
+            file_size_bytes: finalBuffer instanceof Uint8Array ? finalBuffer.byteLength : finalBuffer.byteLength,
             storage_path: storagePath,
             source: "ai_generated",
             ai_prompt: normalizedPrompt,
             metadata: {
               taskId: jobId,
               thumbnailUrl: status.thumbnailUrl,
+              meshNames,
+              meshCount,
             },
           });
         }
@@ -115,6 +157,8 @@ export async function GET(
     progress: status.progress,
     modelUrl: signedModelUrl ?? status.modelUrl,
     thumbnailUrl: status.thumbnailUrl,
+    meshNames,
+    meshCount,
     error: status.error,
   });
 }

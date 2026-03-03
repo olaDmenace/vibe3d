@@ -173,6 +173,14 @@ Phase 6 — Final Features Before Launch
 - [x] Fix 15: Per-user rate limiting on chat endpoint — in-memory Map, 30 messages/minute window, 429 response
 - [x] Fix 16: Unauthenticated editor mode — useAuthStatus hook, disabled chat input with sign-in link, EditorToolbar accepts isAuthenticated prop
 
+### Post-Generation Mesh Segmentation — 2026-03-03
+- [x] Mesh segmenter utility (`src/lib/three/mesh-segmenter.ts`): Union-Find connected component analysis + vertex color clustering to split single-mesh AI-generated models into editable parts
+- [x] Integration into generation polling route (`[jobId]/route.ts`): segmentation runs between model download and Supabase upload; meshNames/meshCount stored in asset metadata and returned in response
+- [x] Chat panel updated: ADD_OBJECT dispatched with meshNames/meshCount in metadata; completion message lists editable parts for multi-mesh models
+- [x] Asset upload route updated: GLB uploads automatically segmented; meshNames/meshCount stored in asset metadata
+- [x] Fallback handling: segmentation errors gracefully fall back to original unsegmented model with single-mesh metadata
+- [x] Installed @gltf-transform/core, @gltf-transform/extensions, @gltf-transform/functions for server-side GLB parsing
+
 ## In Progress
 - (none)
 
@@ -212,6 +220,10 @@ Phase 6 — Final Features Before Launch
 - Sharing uses `get_user_id_by_email` RPC (SECURITY DEFINER) to look up users by email without exposing `auth.users`.
 - Database migrations tracked in `supabase/migrations/` — 3 files covering soft deletes, sharing RLS, and user lookup RPC.
 - Pagination defaults: page=1, limit=20, max limit=100. Response includes `{ data, shared, pagination: { page, limit, total, pages } }`.
+
+- Mesh segmentation pipeline: AI-generated GLB models are auto-segmented server-side using @gltf-transform. Strategy: (1) connected component analysis via Union-Find splits disjoint geometry islands, (2) vertex color clustering splits by dominant color groups. Segmented meshes get descriptive names (e.g. "Chess_Piece_Red_Part", "Chess_Piece_Body"). meshNames/meshCount are stored in asset metadata and passed to the editor store so the AI chat can target individual parts with UPDATE_MATERIAL overrides.
+- Uploaded GLB files also run through the segmentation pipeline automatically.
+- Segmentation gracefully falls back to the original model on error — models always load even if segmentation fails.
 
 ## Known Issues
 - THREE.js warnings in console: "THREE.Clock: This module has been deprecated" and "PCFSoftShadowMap has been removed" — cosmetic, from drei/three version mismatch.

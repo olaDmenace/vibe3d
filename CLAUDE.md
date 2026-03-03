@@ -14,6 +14,7 @@ A web-based 3D editor where users create, edit, save, download, and upload 3D mo
 - Supabase (Postgres, Auth, Storage)
 - Tailwind CSS v4 + shadcn/ui
 - AI: Anthropic Claude API, Meshy API for 3D generation
+- Mesh Processing: @gltf-transform/core + functions for server-side GLB segmentation
 - Billing: Whop SDK (@whop/sdk) for payments & subscriptions
 
 ## Architecture Rules
