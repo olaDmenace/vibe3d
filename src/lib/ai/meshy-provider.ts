@@ -66,11 +66,8 @@ export class MeshyProvider implements ModelGenerationProvider {
       mode: "preview",
       prompt,
       ai_model: "meshy-4",
+      art_style: options?.style || "realistic",
     };
-
-    if (options?.style) {
-      body.art_style = options.style;
-    }
 
     if (options?.targetPolyCount) {
       body.target_polycount = options.targetPolyCount;
@@ -92,6 +89,35 @@ export class MeshyProvider implements ModelGenerationProvider {
 
     const data = (await res.json()) as MeshyTextTo3DResponse;
 
+    return {
+      taskId: data.result,
+      status: "pending",
+    };
+  }
+
+  /**
+   * Start a refine task from a completed preview task.
+   * This produces higher quality geometry and textures.
+   */
+  async refineModel(previewTaskId: string): Promise<GenerationResult> {
+    const res = await fetch(`${MESHY_API_BASE}/text-to-3d`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getMeshyKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "refine",
+        preview_task_id: previewTaskId,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Meshy refine failed (${res.status}): ${err}`);
+    }
+
+    const data = (await res.json()) as MeshyTextTo3DResponse;
     return {
       taskId: data.result,
       status: "pending",

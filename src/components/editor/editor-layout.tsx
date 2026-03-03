@@ -19,7 +19,7 @@ type EditorLayoutProps = {
 export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {}) {
   useKeyboardShortcuts();
   const { isAuthenticated } = useAuthStatus();
-  const { isGenerating, prompt, progress } = useGenerationStore();
+  const { isGenerating, prompt, progress, startedAt } = useGenerationStore();
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#262624]">
@@ -33,6 +33,7 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
         isGenerating={isGenerating}
         prompt={prompt ?? undefined}
         progress={progress}
+        startedAt={startedAt}
       />
 
       {/* Floating left sidebar (fixed positioned) */}

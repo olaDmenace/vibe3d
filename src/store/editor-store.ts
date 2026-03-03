@@ -67,6 +67,7 @@ type EditorStore = {
   // UI State
   activeTool: ActiveTool;
   sidebarTab: SidebarTab;
+  highlightedMeshName: string | null;
 
   // Actions
   dispatch: (action: EditorAction) => void;
@@ -361,10 +362,11 @@ export const useEditorStore = create<EditorStore>()(
 
     past: [],
     future: [],
-    maxHistorySize: 50, // Command-based entries are lightweight
+    maxHistorySize: 30, // Keep history compact to limit memory usage; command-based entries are lightweight but scene snapshots in inverse actions can grow
 
     activeTool: "select",
     sidebarTab: "hierarchy",
+    highlightedMeshName: null,
 
     dispatch: (action: EditorAction) => {
       if (!TRANSIENT_ACTIONS.includes(action.type)) {
@@ -392,6 +394,11 @@ export const useEditorStore = create<EditorStore>()(
         set((state) => {
           applyAction(state, action);
         });
+      }
+
+      // Clear mesh highlight when changing object selection
+      if (action.type === "SELECT_OBJECT") {
+        set({ highlightedMeshName: null });
       }
     },
 

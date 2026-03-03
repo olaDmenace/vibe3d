@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExportFormat } from "@/lib/three/export-scene";
 import type { EditorAction } from "@/types/actions";
 import { SharingModal } from "@/components/editor/sharing-modal";
+import { MeshPartsPanel } from "./mesh-parts-panel";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -635,8 +636,13 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
           />
         </div>
 
-        {/* Divider */}
-        <div className="mx-3 border-t border-white/[0.06]" />
+        {/* ----- Mesh Parts section (for generated models with 2+ meshes) ----- */}
+        {selectedObject && (
+          <>
+            <MeshPartsPanel object={selectedObject} />
+            <div className="mx-3 border-t border-white/[0.06]" />
+          </>
+        )}
 
         {/* ----- Color Assets section ----- */}
         <AssetSection label="Color Assets" defaultExpanded={colorAssets.length > 0}>

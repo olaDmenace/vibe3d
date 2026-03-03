@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { useEditorStore } from "@/store/editor-store";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import type { ThreeEvent } from "@react-three/fiber";
 import type { SceneObject } from "@/types/scene";
 
 /**
@@ -195,6 +196,10 @@ function GLBModelFromUrl({
   isSelected: boolean;
 }) {
   const { scene } = useGLTF(url);
+  const highlightedMeshName = useEditorStore((s) => s.highlightedMeshName);
+
+  // Track the previous clone so we can dispose its materials on change
+  const previousCloneRef = useRef<THREE.Object3D | null>(null);
 
   // On first load, extract mesh names into metadata so AI knows about them
   const meshNamesExtracted = useRef(false);
@@ -220,9 +225,37 @@ function GLBModelFromUrl({
     }
   }, [scene, obj.id]);
 
+  // Dispose materials on unmount
+  useEffect(() => {
+    return () => {
+      if (previousCloneRef.current) {
+        previousCloneRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of materials) {
+              mat.dispose();
+            }
+          }
+        });
+      }
+    };
+  }, []);
+
   // Clone scene and apply material overrides + shadows
   // Re-clones when overrides change so we never mutate the cached original
   const cloned = useMemo(() => {
+    // Dispose materials from the previous clone
+    if (previousCloneRef.current) {
+      previousCloneRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          for (const mat of materials) {
+            mat.dispose();
+          }
+        }
+      });
+    }
+
     const clone = scene.clone();
 
     // Build lookup: meshName → override, plus a fallback for unnamed (global) overrides
@@ -260,15 +293,38 @@ function GLBModelFromUrl({
       }
     });
 
+    previousCloneRef.current = clone;
     return clone;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, obj.materialOverrides]);
 
+  // Click handler to identify individual mesh parts within a selected model
+  const handleMeshClick = useCallback(
+    (event: ThreeEvent<MouseEvent>) => {
+      if (!isSelected) return;
+      const clickedMesh = event.object;
+      if (clickedMesh instanceof THREE.Mesh && clickedMesh.name) {
+        const meshNames = (obj.metadata?.meshNames as string[]) ?? [];
+        if (meshNames.includes(clickedMesh.name)) {
+          const current = useEditorStore.getState().highlightedMeshName;
+          useEditorStore.setState({
+            highlightedMeshName: current === clickedMesh.name ? null : clickedMesh.name,
+          });
+          event.stopPropagation();
+        }
+      }
+    },
+    [isSelected, obj.metadata?.meshNames]
+  );
+
   return (
     <>
-      <primitive object={cloned} />
-      {isSelected && (
+      <primitive object={cloned} onClick={handleMeshClick} />
+      {isSelected && !highlightedMeshName && (
         <SelectionOverlay scene={scene} />
+      )}
+      {isSelected && highlightedMeshName && (
+        <MeshHighlight scene={scene} meshName={highlightedMeshName} />
       )}
     </>
   );
@@ -290,6 +346,53 @@ function SelectionOverlay({ scene }: { scene: THREE.Object3D }) {
         wireframe
         transparent
         opacity={0.3}
+      />
+    </mesh>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mesh-level highlight (amber wireframe around a single mesh)        */
+/* ------------------------------------------------------------------ */
+
+function MeshHighlight({
+  scene,
+  meshName,
+}: {
+  scene: THREE.Object3D;
+  meshName: string;
+}) {
+  const { size, center } = useMemo(() => {
+    let targetMesh: THREE.Mesh | null = null;
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.name === meshName) {
+        targetMesh = child;
+      }
+    });
+
+    if (!targetMesh) {
+      const box = new THREE.Box3().setFromObject(scene);
+      return {
+        size: box.getSize(new THREE.Vector3()),
+        center: box.getCenter(new THREE.Vector3()),
+      };
+    }
+
+    const box = new THREE.Box3().setFromObject(targetMesh);
+    return {
+      size: box.getSize(new THREE.Vector3()),
+      center: box.getCenter(new THREE.Vector3()),
+    };
+  }, [scene, meshName]);
+
+  return (
+    <mesh position={[center.x, center.y, center.z]}>
+      <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
+      <meshBasicMaterial
+        color="#f59e0b"
+        wireframe
+        transparent
+        opacity={0.5}
       />
     </mesh>
   );

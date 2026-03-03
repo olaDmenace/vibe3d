@@ -205,6 +205,91 @@ function ProfileChevronIcon() {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  MeshPartsList — expandable mesh children in hierarchy               */
+/* ------------------------------------------------------------------ */
+
+function formatMeshName(name: string): string {
+  return name
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function MeshPartsList({
+  objectId: _objectId,
+  meshNames,
+  isObjectSelected,
+}: {
+  objectId: string;
+  meshNames: string[];
+  isObjectSelected: boolean;
+}) {
+  const highlightedMeshName = useEditorStore((s) => s.highlightedMeshName);
+  const [hoveredPart, setHoveredPart] = useState<string | null>(null);
+
+  if (!isObjectSelected) return null;
+
+  return (
+    <div className="flex flex-col">
+      {meshNames.map((name) => {
+        const isHighlighted = highlightedMeshName === name;
+        const isHovered = hoveredPart === name;
+
+        return (
+          <button
+            key={name}
+            className="flex w-full items-center transition-colors"
+            style={{
+              height: 26,
+              paddingLeft: 38,
+              background: isHighlighted
+                ? "rgba(245, 158, 11, 0.10)"
+                : isHovered
+                  ? "rgba(255, 255, 255, 0.04)"
+                  : "transparent",
+              borderLeft: isHighlighted
+                ? "2px solid rgba(245, 158, 11, 0.4)"
+                : "2px solid transparent",
+            }}
+            onClick={() => {
+              useEditorStore.setState({
+                highlightedMeshName: isHighlighted ? null : name,
+              });
+            }}
+            onMouseEnter={() => {
+              setHoveredPart(name);
+              useEditorStore.setState({ highlightedMeshName: name });
+            }}
+            onMouseLeave={() => {
+              setHoveredPart(null);
+              if (!isHighlighted) {
+                useEditorStore.setState({ highlightedMeshName: null });
+              }
+            }}
+          >
+            <span
+              className="truncate text-left"
+              style={{
+                fontSize: 10,
+                color: isHighlighted
+                  ? "rgba(245, 158, 11, 0.9)"
+                  : "rgba(255, 255, 255, 0.45)",
+                fontFamily: "'Aeonik Pro', sans-serif",
+              }}
+            >
+              {formatMeshName(name)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
 export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
   const objects = useEditorStore((s) => s.scene.objects);
   const selectedObjectId = useEditorStore((s) => s.selectedObjectId);
@@ -444,58 +529,91 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
         {objectList.map((obj) => {
           const isSelected = obj.id === selectedObjectId;
           const isExpanded = expandedObjects.has(obj.id);
+          const meshNames = (obj.metadata?.meshNames as string[]) ?? [];
+          const hasMeshParts = meshNames.length >= 2;
 
           return (
-            <button
-              key={obj.id}
-              className="flex w-full items-center transition-colors"
-              style={{
-                height: 32,
-                background: isSelected
-                  ? "rgba(255, 255, 255, 0.08)"
-                  : "transparent",
-                borderLeft: isSelected
-                  ? "2px solid rgba(255, 255, 255, 0.3)"
-                  : "2px solid transparent",
-              }}
-              onClick={() => handleSelectObject(obj.id)}
-              onDoubleClick={() => toggleObjectExpanded(obj.id)}
-            >
-              {/* Expand icon */}
-              <div
-                className="flex shrink-0 items-center justify-center"
-                style={{ width: 24, paddingLeft: 6 }}
-              >
-                <TreeExpandIcon expanded={isExpanded} />
-              </div>
-
-              {/* Object name */}
-              <span
-                className="flex-1 truncate text-left"
+            <div key={obj.id}>
+              {/* Object row */}
+              <button
+                className="flex w-full items-center transition-colors"
                 style={{
-                  fontSize: 11,
-                  color: isSelected ? "#E5E5E7" : "rgba(229, 229, 231, 0.7)",
-                  fontFamily: "'Aeonik Pro', sans-serif",
-                  paddingLeft: 2.5,
+                  height: 32,
+                  background: isSelected
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "transparent",
+                  borderLeft: isSelected
+                    ? "2px solid rgba(255, 255, 255, 0.3)"
+                    : "2px solid transparent",
                 }}
+                onClick={() => handleSelectObject(obj.id)}
+                onDoubleClick={() => { if (hasMeshParts) toggleObjectExpanded(obj.id); }}
               >
-                {obj.name}
-              </span>
-
-              {/* Visibility indicator for hidden objects */}
-              {!obj.visible && (
-                <span
-                  className="mr-2 shrink-0"
-                  style={{
-                    fontSize: 9,
-                    color: "rgba(255, 255, 255, 0.25)",
-                    fontFamily: "'Spline Sans', sans-serif",
+                {/* Expand icon */}
+                <div
+                  className="flex shrink-0 items-center justify-center"
+                  style={{ width: 24, paddingLeft: 6 }}
+                  onClick={(e) => {
+                    if (hasMeshParts) {
+                      e.stopPropagation();
+                      toggleObjectExpanded(obj.id);
+                    }
                   }}
                 >
-                  hidden
+                  <TreeExpandIcon expanded={isExpanded && hasMeshParts} />
+                </div>
+
+                {/* Object name */}
+                <span
+                  className="flex-1 truncate text-left"
+                  style={{
+                    fontSize: 11,
+                    color: isSelected ? "#E5E5E7" : "rgba(229, 229, 231, 0.7)",
+                    fontFamily: "'Aeonik Pro', sans-serif",
+                    paddingLeft: 2.5,
+                  }}
+                >
+                  {obj.name}
                 </span>
+
+                {/* Part count badge for models with mesh parts */}
+                {hasMeshParts && (
+                  <span
+                    className="mr-1 shrink-0"
+                    style={{
+                      fontSize: 9,
+                      color: "rgba(255, 255, 255, 0.3)",
+                      fontFamily: "'Spline Sans', sans-serif",
+                    }}
+                  >
+                    {meshNames.length}p
+                  </span>
+                )}
+
+                {/* Visibility indicator for hidden objects */}
+                {!obj.visible && (
+                  <span
+                    className="mr-2 shrink-0"
+                    style={{
+                      fontSize: 9,
+                      color: "rgba(255, 255, 255, 0.25)",
+                      fontFamily: "'Spline Sans', sans-serif",
+                    }}
+                  >
+                    hidden
+                  </span>
+                )}
+              </button>
+
+              {/* Expanded mesh part children */}
+              {isExpanded && hasMeshParts && (
+                <MeshPartsList
+                  objectId={obj.id}
+                  meshNames={meshNames}
+                  isObjectSelected={isSelected}
+                />
               )}
-            </button>
+            </div>
           );
         })}
       </div>

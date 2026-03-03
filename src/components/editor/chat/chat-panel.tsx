@@ -90,9 +90,11 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     };
   }, []);
 
-  // Poll generation status using chained setTimeout (not setInterval)
+  // Poll generation status using chained setTimeout with exponential backoff.
+  // Supports two-step preview+refine: when the server returns "refining",
+  // the client switches to polling the refine task ID.
   const pollGeneration = useCallback(
-    (taskId: string, prompt: string) => {
+    (initialTaskId: string, prompt: string) => {
       if (!projectId) return;
 
       // Reset the one-shot gate for this new generation
@@ -104,20 +106,73 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         pollTimeoutRef.current = null;
       }
 
+      let delay = 3000;           // Start at 3s
+      const MAX_DELAY = 15000;    // Cap at 15s
+      const BACKOFF_FACTOR = 1.5;
+      let pollCount = 0;
+      const MAX_POLLS = 60;       // ~5 minutes with backoff
+
+      // Mutable — may switch from preview task to refine task mid-poll
+      let currentTaskId = initialTaskId;
+      let isRefining = false;
+
       async function poll() {
         // Already handled — don't poll again
         if (generationHandledRef.current) return;
 
+        pollCount++;
+
+        // Give up after too many polls
+        if (pollCount > MAX_POLLS) {
+          generationHandledRef.current = true;
+          setGenerationJob(null);
+          useGenerationStore.getState().clearGeneration();
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "Generation is taking longer than expected. The model may still be processing — try refreshing the page in a minute to check.",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          return;
+        }
+
         try {
+          const refineParam = isRefining ? "&refine=true" : "";
           const res = await fetch(
-            `/api/projects/${projectId}/generate/${taskId}?prompt=${encodeURIComponent(prompt)}`
+            `/api/projects/${projectId}/generate/${currentTaskId}?prompt=${encodeURIComponent(prompt)}${refineParam}`
           );
           const data = await res.json();
 
           // Already handled by a concurrent callback — bail
           if (generationHandledRef.current) return;
 
-          if (data.status === "complete") {
+          // Map progress: preview phase = 0-50%, refine phase = 50-100%
+          const rawProgress: number = data.progress ?? 0;
+          const displayProgress = isRefining
+            ? 50 + Math.floor(rawProgress / 2)
+            : Math.floor(rawProgress / 2);
+
+          useGenerationStore.getState().setProgress(displayProgress);
+
+          setGenerationJob((prev) =>
+            prev
+              ? { ...prev, status: data.status, progress: displayProgress, error: data.error }
+              : prev
+          );
+
+          // Preview completed — server started a refine task
+          if (data.status === "refining" && data.refineTaskId) {
+            currentTaskId = data.refineTaskId;
+            isRefining = true;
+            delay = 3000; // Reset backoff for refine phase
+            useGenerationStore.getState().setProgress(50);
+            pollTimeoutRef.current = setTimeout(poll, delay);
+            return;
+          }
+
+          if (data.status === "complete" && !generationHandledRef.current) {
             // Gate: prevent re-entry from any concurrent poll
             generationHandledRef.current = true;
 
@@ -133,7 +188,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               payload: {
                 name: cleanPromptForName(prompt),
                 parentId: null,
-                assetId: `generated:${taskId}`,
+                assetId: `generated:${currentTaskId}`,
                 visible: true,
                 locked: false,
                 transform: {
@@ -143,7 +198,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 },
                 materialOverrides: [],
                 metadata: {
-                  generationTaskId: taskId,
+                  generationTaskId: currentTaskId,
                   thumbnailUrl: data.thumbnailUrl,
                   modelUrl: data.modelUrl,
                   meshNames: resMeshNames,
@@ -152,10 +207,15 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               },
             });
 
-            const meshInfo =
-              resMeshCount >= 2
-                ? ` It has ${resMeshCount} editable parts: ${resMeshNames.join(", ")}.`
-                : "";
+            // Build mesh info summary — truncate to first 6 names
+            let meshInfo = "";
+            if (resMeshCount >= 2) {
+              const displayNames = resMeshNames.slice(0, 6);
+              const remaining = resMeshCount - displayNames.length;
+              const nameList = displayNames.join(", ") +
+                (remaining > 0 ? `, and ${remaining} more` : "");
+              meshInfo = ` It has ${resMeshCount} editable parts: ${nameList}. You can color each part individually.`;
+            }
 
             setMessages((prev) => [
               ...prev,
@@ -172,7 +232,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             // Browser push notification
             notify(`3D model ready`, {
               body: `"${cleanPromptForName(prompt)}" has been generated and added to your scene.`,
-              tag: `generation-${taskId}`,
+              tag: `generation-${currentTaskId}`,
             });
 
             return; // don't schedule next poll
@@ -181,11 +241,26 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           if (data.status === "failed") {
             generationHandledRef.current = true;
 
+            // Build user-friendly error message
+            let errorMessage: string;
+            const rawError: string = data.error || "";
+
+            if (rawError.toLowerCase().includes("busy") || rawError.includes("503")) {
+              errorMessage = "The AI generation service is currently busy. This is temporary — please try again in a minute or two.";
+            } else if (rawError.toLowerCase().includes("timeout")) {
+              errorMessage = "The generation request timed out. Try a simpler prompt or try again shortly.";
+            } else if (rawError) {
+              const cleanError = rawError.replace(/\.+$/, "");
+              errorMessage = `Generation failed: ${cleanError}. You can try again with the same or a different prompt.`;
+            } else {
+              errorMessage = "Generation failed unexpectedly. Please try again.";
+            }
+
             setMessages((prev) => [
               ...prev,
               {
                 role: "assistant",
-                content: `Generation failed: ${data.error || "Unknown error"}. Please try again.`,
+                content: errorMessage,
                 timestamp: new Date().toISOString(),
               },
             ]);
@@ -196,30 +271,22 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             return; // don't schedule next poll
           }
 
-          // Still pending/processing — update progress and schedule next poll
-          if (data.progress !== undefined) {
-            useGenerationStore.getState().setProgress(data.progress);
-          }
-
-          setGenerationJob((prev) =>
-            prev?.taskId === taskId
-              ? { ...prev, status: data.status, progress: data.progress ?? prev.progress, error: data.error }
-              : prev
-          );
-
+          // Still pending/processing — schedule next poll with backoff
           if (!generationHandledRef.current) {
-            pollTimeoutRef.current = setTimeout(poll, 3000);
+            delay = Math.min(delay * BACKOFF_FACTOR, MAX_DELAY);
+            pollTimeoutRef.current = setTimeout(poll, delay);
           }
         } catch {
-          // Polling failure — retry unless already handled
-          if (!generationHandledRef.current) {
-            pollTimeoutRef.current = setTimeout(poll, 3000);
+          // Network error — retry with backoff unless already handled
+          if (!generationHandledRef.current && pollCount < MAX_POLLS) {
+            delay = Math.min(delay * BACKOFF_FACTOR, MAX_DELAY);
+            pollTimeoutRef.current = setTimeout(poll, delay);
           }
         }
       }
 
-      // Start first poll after a short delay
-      pollTimeoutRef.current = setTimeout(poll, 3000);
+      // Start first poll after initial delay
+      pollTimeoutRef.current = setTimeout(poll, delay);
     },
     [projectId, dispatch, notify]
   );

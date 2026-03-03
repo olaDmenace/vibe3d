@@ -181,6 +181,46 @@ Phase 6 — Final Features Before Launch
 - [x] Fallback handling: segmentation errors gracefully fall back to original unsegmented model with single-mesh metadata
 - [x] Installed @gltf-transform/core, @gltf-transform/extensions, @gltf-transform/functions for server-side GLB parsing
 
+### Generation Polling & Reliability — 2026-03-03
+- [x] Exponential backoff on generation polling (3s initial → 1.5x growth → 15s cap) — reduces wasted requests from ~40 to ~15 for typical 60s generation
+- [x] Max poll limit (60 polls / ~5 min) with graceful timeout message instead of polling forever
+- [x] Auto-retry on transient Meshy failures (busy/429/503) — 2 retries on generate, 1 retry on status poll, with exponential delay
+- [x] Cleaned up error messages: no double periods, categorized messages for busy/timeout/generic failures
+- [x] Elapsed time display in generation overlay — `startedAt` field in generation store, live counter in overlay
+
+### Autonomous Fix Pass — 2026-03-03
+- [x] Generation polling: exponential backoff (3s-15s), max 60 polls, chained setTimeout
+- [x] Generation deduplication: one-shot ref gate prevents 5x model add
+- [x] Error messages: cleaned up double-period and redundant text
+- [x] Object naming: prompt cleaning (strip verbs/articles, capitalize)
+- [x] Primitive offset: new objects spread along X axis
+- [x] Meshy retry: withRetry wrapper for transient 503/busy errors
+- [x] Generation overlay: spinner, progress bar, elapsed time, prompt display
+- [x] Generation store: cross-component generation state (Zustand)
+- [x] Dashboard handoff: overlay shows immediately on editor mount
+- [x] Undo history: capped at 30 entries
+- [x] Material disposal: GLB clone materials disposed on change and unmount
+- [x] Bounding box: memoized in selection overlay
+- [x] Transform sync: destructured array deps for reliable useEffect firing
+
+### Model Quality & Segmentation — 2026-03-03
+- [x] Meshy provider: two-step preview+refine pipeline for higher quality models
+- [x] Default art_style set to "realistic" for all generations
+- [x] Prompt expansion improved with category-specific structural hints
+- [x] Segmentation capped at 12 parts max (excess merged into largest)
+- [x] Minimum component thresholds raised from fixed count to 5% of total vertices
+- [x] Color merge threshold increased (bucket size 32 → 64) to reduce over-segmentation
+- [x] Chat success message truncated to show first 6 part names
+
+### Sub-Part Interaction — 2026-03-03
+- [x] MeshPartsPanel in right sidebar: per-part color swatches, click-to-highlight, hover-to-preview, native color picker, reset button
+- [x] Viewport mesh highlighting: amber (#f59e0b) wireframe overlay on highlighted mesh, blue overlay when no mesh selected
+- [x] Viewport click-to-identify: clicking a mesh within a selected model toggles its highlight via ThreeEvent
+- [x] Scene hierarchy mesh expansion: expandable mesh children under generated models, part count badge ("3p"), amber highlight on hover/click
+- [x] MeshPartsList component: indented mesh part rows in hierarchy with amber border + text color on selection
+- [x] highlightedMeshName state: added to EditorStore, auto-cleared on object deselection (SELECT_OBJECT dispatch)
+- [x] Spatial mesh naming: replaced index-based naming with spatial+size analysis — parts named "body", "top", "base", "left_section", "right_section", "front", "back", "detail" based on bounding box position relative to model center and volume ratio
+
 ## In Progress
 - (none)
 

@@ -4,8 +4,34 @@ import {
   checkGenerationStatus,
   downloadModel,
   normalizePrompt,
+  refineModel,
 } from "@/lib/ai/generation-service";
 import { segmentMesh } from "@/lib/three/mesh-segmenter";
+
+/* ------------------------------------------------------------------ */
+/*  Retry helper for transient Meshy failures                          */
+/* ------------------------------------------------------------------ */
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 1,
+  delayMs = 2000
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message.toLowerCase();
+      const isTransient =
+        msg.includes("busy") || msg.includes("429") || msg.includes("503");
+      if (!isTransient || attempt === maxRetries) throw lastError;
+      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
 
 /* ------------------------------------------------------------------ */
 /*  GET /api/projects/[id]/generate/[jobId] — poll generation status  */
@@ -38,8 +64,11 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  // Check generation status
-  const status = await checkGenerationStatus(jobId);
+  const url = new URL(request.url);
+  const isRefine = url.searchParams.get("refine") === "true";
+
+  // Check generation status (with retry for transient Meshy failures)
+  const status = await withRetry(() => checkGenerationStatus(jobId), 1, 2000);
 
   // If complete, download and store the model, then return a Supabase signed URL
   let signedModelUrl: string | null = null;
@@ -47,6 +76,23 @@ export async function GET(
   let meshCount = 0;
 
   if (status.status === "complete" && status.modelUrl) {
+    // If this is a preview completing (not a refine), start a refine task
+    if (!isRefine) {
+      try {
+        const refineResult = await refineModel(jobId);
+        return NextResponse.json({
+          status: "refining",
+          progress: 0,
+          previewTaskId: jobId,
+          refineTaskId: refineResult.taskId,
+          thumbnailUrl: status.thumbnailUrl,
+        });
+      } catch (refineErr) {
+        // Refine failed — fall through to use the preview model
+        console.warn("[generate] Refine failed, using preview model:", refineErr);
+      }
+    }
+
     const storagePath = `${user.id}/${projectId}/${jobId}.glb`;
 
     // Check if asset already exists for this task
@@ -69,7 +115,6 @@ export async function GET(
         const { buffer } = await downloadModel(status.modelUrl);
 
         // Get the prompt from the query string
-        const url = new URL(request.url);
         const prompt = url.searchParams.get("prompt") ?? "ai-model";
 
         // --- Mesh segmentation ---

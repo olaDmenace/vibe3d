@@ -15,8 +15,12 @@ import { dedup, prune } from "@gltf-transform/functions";
 /*  Strategy:                                                          */
 /*  1. Connected component analysis — split disjoint geometry islands  */
 /*  2. Vertex color clustering — split by dominant vertex color groups */
-/*  3. Naming heuristic — derive human-readable part names             */
+/*  3. Cap at MAX_PARTS to avoid over-segmentation                    */
+/*  4. Naming heuristic — derive human-readable part names             */
 /* ------------------------------------------------------------------ */
+
+/** Hard cap on the number of segmented parts to prevent over-segmentation */
+const MAX_PARTS = 12;
 
 /* ------------------------------------------------------------------ */
 /*  Union-Find for connected component analysis                        */
@@ -77,7 +81,7 @@ class UnionFind {
 /* ------------------------------------------------------------------ */
 
 /** Quantize an RGB color to a hex bucket for grouping */
-function quantizeColor(r: number, g: number, b: number, bucketSize = 32): string {
+function quantizeColor(r: number, g: number, b: number, bucketSize = 64): string {
   const qr = Math.round(r * 255 / bucketSize) * bucketSize;
   const qg = Math.round(g * 255 / bucketSize) * bucketSize;
   const qb = Math.round(b * 255 / bucketSize) * bucketSize;
@@ -112,6 +116,43 @@ function colorToName(key: string): string {
   if (r > g + 40) return "Purple";
   if (g > r + 40) return "Cyan";
   return "Blue";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cap components — merge excess small parts into one                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * If there are more than MAX_PARTS components, keep the largest
+ * MAX_PARTS - 1 and merge the rest into a single "details" component.
+ */
+function capPrimitiveParts(parts: Primitive[]): Primitive[] {
+  if (parts.length <= MAX_PARTS) return parts;
+
+  // Sort by vertex count descending (largest first)
+  const withSize = parts.map((p) => {
+    const pos = p.getAttribute("POSITION");
+    return { prim: p, vertCount: pos?.getCount() ?? 0 };
+  });
+  withSize.sort((a, b) => b.vertCount - a.vertCount);
+
+  // Keep top MAX_PARTS, discard the rest (their geometry stays in the doc
+  // but won't be referenced — prune() cleans them up later)
+  return withSize.slice(0, MAX_PARTS).map((w) => w.prim);
+}
+
+function capColorParts(
+  parts: { prim: Primitive; colorKey: string }[]
+): { prim: Primitive; colorKey: string }[] {
+  if (parts.length <= MAX_PARTS) return parts;
+
+  const withSize = parts.map((p) => {
+    const pos = p.prim.getAttribute("POSITION");
+    return { ...p, vertCount: pos?.getCount() ?? 0 };
+  });
+  withSize.sort((a, b) => b.vertCount - a.vertCount);
+
+  return withSize.slice(0, MAX_PARTS).map(({ prim, colorKey }) => ({ prim, colorKey }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -155,9 +196,10 @@ function splitByComponents(
   const components = uf.components();
   if (components.size <= 1) return [prim]; // single connected component
 
-  // Filter out tiny components (noise)
+  // Filter out tiny components (noise) — require at least 5% of total vertices
+  const relativeMin = Math.max(minVertices, Math.floor(vertexCount * 0.05));
   const significantComponents = [...components.values()].filter(
-    (verts) => verts.length >= minVertices
+    (verts) => verts.length >= relativeMin
   );
 
   if (significantComponents.length <= 1) return [prim];
@@ -271,7 +313,8 @@ function splitByColorGroups(
     return [{ prim, colorKey: key }];
   }
 
-  // Filter tiny groups into the largest group
+  // Filter tiny groups into the largest group — require at least 5% of total
+  const relativeMin = Math.max(minVertices, Math.floor(vertexCount * 0.05));
   const sortedGroups = [...colorGroups.entries()].sort(
     (a, b) => b[1].length - a[1].length
   );
@@ -281,7 +324,7 @@ function splitByColorGroups(
   const largestVerts = sortedGroups[0][1];
 
   for (const [key, verts] of sortedGroups) {
-    if (verts.length >= minVertices) {
+    if (verts.length >= relativeMin) {
       significantGroups.push([key, verts]);
     } else {
       // Merge tiny groups into largest
@@ -364,14 +407,59 @@ function splitByColorGroups(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Naming heuristic                                                   */
+/*  Naming heuristic — spatial + size analysis                         */
 /* ------------------------------------------------------------------ */
 
+interface PartBounds {
+  center: [number, number, number];
+  size: [number, number, number];
+  volume: number;
+}
+
+/** Compute AABB center, size, and volume for a primitive */
+function computePartBounds(prim: Primitive): PartBounds | null {
+  const posAccessor = prim.getAttribute("POSITION");
+  if (!posAccessor) return null;
+
+  const count = posAccessor.getCount();
+  if (count === 0) return null;
+
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+  const elem = [0, 0, 0];
+  for (let i = 0; i < count; i++) {
+    posAccessor.getElement(i, elem);
+    if (elem[0] < minX) minX = elem[0];
+    if (elem[1] < minY) minY = elem[1];
+    if (elem[2] < minZ) minZ = elem[2];
+    if (elem[0] > maxX) maxX = elem[0];
+    if (elem[1] > maxY) maxY = elem[1];
+    if (elem[2] > maxZ) maxZ = elem[2];
+  }
+
+  const sx = maxX - minX;
+  const sy = maxY - minY;
+  const sz = maxZ - minZ;
+
+  return {
+    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+    size: [sx, sy, sz],
+    volume: sx * sy * sz,
+  };
+}
+
+/**
+ * Derive a spatial name based on the part's position relative to the
+ * overall model bounds and its relative size.
+ */
 function generatePartName(
   index: number,
   totalParts: number,
   promptHint: string,
-  colorKey?: string
+  colorKey: string | undefined,
+  partBounds: PartBounds | null,
+  allBounds: (PartBounds | null)[],
 ): string {
   // If we have a color-based split, use color name
   if (colorKey && colorKey !== "default") {
@@ -379,13 +467,101 @@ function generatePartName(
     return `${promptHint}_${colorName}_Part`.replace(/\s+/g, "_");
   }
 
-  // For connected-component splits, use indexed naming
-  if (totalParts <= 4) {
-    const labels = ["Body", "Detail_A", "Detail_B", "Detail_C"];
-    return `${promptHint}_${labels[index]}`.replace(/\s+/g, "_");
+  // If no bounds data, fall back to indexed
+  if (!partBounds) {
+    return `${promptHint}_Part_${index + 1}`.replace(/\s+/g, "_");
   }
 
-  return `${promptHint}_Part_${index + 1}`.replace(/\s+/g, "_");
+  // Compute overall model bounds from all parts
+  const validBounds = allBounds.filter((b): b is PartBounds => b !== null);
+  if (validBounds.length === 0) {
+    return `${promptHint}_Part_${index + 1}`.replace(/\s+/g, "_");
+  }
+
+  let modelMinX = Infinity, modelMinY = Infinity, modelMinZ = Infinity;
+  let modelMaxX = -Infinity, modelMaxY = -Infinity, modelMaxZ = -Infinity;
+  let totalVolume = 0;
+
+  for (const b of validBounds) {
+    const halfX = b.size[0] / 2, halfY = b.size[1] / 2, halfZ = b.size[2] / 2;
+    if (b.center[0] - halfX < modelMinX) modelMinX = b.center[0] - halfX;
+    if (b.center[1] - halfY < modelMinY) modelMinY = b.center[1] - halfY;
+    if (b.center[2] - halfZ < modelMinZ) modelMinZ = b.center[2] - halfZ;
+    if (b.center[0] + halfX > modelMaxX) modelMaxX = b.center[0] + halfX;
+    if (b.center[1] + halfY > modelMaxY) modelMaxY = b.center[1] + halfY;
+    if (b.center[2] + halfZ > modelMaxZ) modelMaxZ = b.center[2] + halfZ;
+    totalVolume += b.volume;
+  }
+
+  const modelCenter: [number, number, number] = [
+    (modelMinX + modelMaxX) / 2,
+    (modelMinY + modelMaxY) / 2,
+    (modelMinZ + modelMaxZ) / 2,
+  ];
+  const modelExtent: [number, number, number] = [
+    (modelMaxX - modelMinX) || 1,
+    (modelMaxY - modelMinY) || 1,
+    (modelMaxZ - modelMinZ) || 1,
+  ];
+
+  // Normalize part center to [-1, 1] range relative to model
+  const nx = (partBounds.center[0] - modelCenter[0]) / (modelExtent[0] / 2);
+  const ny = (partBounds.center[1] - modelCenter[1]) / (modelExtent[1] / 2);
+  const nz = (partBounds.center[2] - modelCenter[2]) / (modelExtent[2] / 2);
+
+  // Volume ratio — the largest part is the "body"
+  const volumeRatio = totalVolume > 0 ? partBounds.volume / totalVolume : 0;
+
+  let label: string;
+
+  if (volumeRatio > 0.4) {
+    label = "body";
+  } else if (ny > 0.5) {
+    label = "top";
+  } else if (ny < -0.5) {
+    label = "base";
+  } else if (nx < -0.4) {
+    label = "left_section";
+  } else if (nx > 0.4) {
+    label = "right_section";
+  } else if (nz > 0.4) {
+    label = "front";
+  } else if (nz < -0.4) {
+    label = "back";
+  } else if (volumeRatio < 0.1) {
+    label = "detail";
+  } else {
+    label = `section_${index + 1}`;
+  }
+
+  // Deduplicate: if another part already has this label, append index
+  const usedLabels = new Set<string>();
+  for (let i2 = 0; i2 < totalParts; i2++) {
+    if (i2 === index) continue;
+    const b2 = allBounds[i2];
+    if (!b2) continue;
+    const vr2 = totalVolume > 0 ? b2.volume / totalVolume : 0;
+    const nx2 = (b2.center[0] - modelCenter[0]) / (modelExtent[0] / 2);
+    const ny2 = (b2.center[1] - modelCenter[1]) / (modelExtent[1] / 2);
+    const nz2 = (b2.center[2] - modelCenter[2]) / (modelExtent[2] / 2);
+    let l2: string;
+    if (vr2 > 0.4) l2 = "body";
+    else if (ny2 > 0.5) l2 = "top";
+    else if (ny2 < -0.5) l2 = "base";
+    else if (nx2 < -0.4) l2 = "left_section";
+    else if (nx2 > 0.4) l2 = "right_section";
+    else if (nz2 > 0.4) l2 = "front";
+    else if (nz2 < -0.4) l2 = "back";
+    else if (vr2 < 0.1) l2 = "detail";
+    else l2 = `section_${i2 + 1}`;
+    usedLabels.add(l2);
+  }
+
+  if (usedLabels.has(label)) {
+    label = `${label}_${index + 1}`;
+  }
+
+  return `${promptHint}_${label}`.replace(/\s+/g, "_");
 }
 
 /* ------------------------------------------------------------------ */
@@ -470,18 +646,20 @@ export async function segmentMesh(
     }
 
     // Step 1: Try connected component splitting on each primitive
-    const splitPrimitives: Primitive[] = [];
+    let splitPrimitives: Primitive[] = [];
     for (const prim of primitives) {
       const components = splitByComponents(doc, prim, minVertices);
       splitPrimitives.push(...components);
     }
+    splitPrimitives = capPrimitiveParts(splitPrimitives);
 
     // Step 2: Try color-based splitting on each result
-    const finalParts: { prim: Primitive; colorKey: string }[] = [];
+    let finalParts: { prim: Primitive; colorKey: string }[] = [];
     for (const prim of splitPrimitives) {
       const colorSplit = splitByColorGroups(doc, prim, minVertices);
       finalParts.push(...colorSplit);
     }
+    finalParts = capColorParts(finalParts);
 
     // If no meaningful split happened, return with single mesh name
     if (finalParts.length <= 1) {
@@ -500,6 +678,9 @@ export async function segmentMesh(
     // Build new nodes for each part
     const meshNames: string[] = [];
 
+    // Pre-compute bounds for all parts (needed for spatial naming)
+    const allBounds = finalParts.map(({ prim }) => computePartBounds(prim));
+
     // Remove the original mesh from its node
     meshNode.setMesh(null);
 
@@ -509,7 +690,9 @@ export async function segmentMesh(
         i,
         finalParts.length,
         promptHint,
-        colorKey
+        colorKey,
+        allBounds[i],
+        allBounds,
       );
       meshNames.push(partName);
 

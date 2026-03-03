@@ -10,6 +10,31 @@ import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
 import { validateBody, generateSchema, apiError } from "@/lib/api/validation";
 
 /* ------------------------------------------------------------------ */
+/*  Retry helper for transient Meshy failures                          */
+/* ------------------------------------------------------------------ */
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 2,
+  delayMs = 3000
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message.toLowerCase();
+      const isTransient =
+        msg.includes("busy") || msg.includes("429") || msg.includes("503");
+      if (!isTransient || attempt === maxRetries) throw lastError;
+      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+/* ------------------------------------------------------------------ */
 /*  POST /api/projects/[id]/generate — start a text-to-3D generation  */
 /* ------------------------------------------------------------------ */
 
@@ -110,9 +135,14 @@ export async function POST(
     // Expand short prompts for better generation quality;
     // the original prompt is stored in the asset for cache matching
     const expandedPrompt = expandPromptForGeneration(prompt);
-    const result = imageUrl
-      ? await generateFromImage(imageUrl, { provider: "meshy" })
-      : await generateFromText(expandedPrompt, { style, provider: "meshy" });
+    const result = await withRetry(
+      () =>
+        imageUrl
+          ? generateFromImage(imageUrl, { provider: "meshy" })
+          : generateFromText(expandedPrompt, { style, provider: "meshy" }),
+      2,
+      3000
+    );
 
     // Increment generation count
     await supabase

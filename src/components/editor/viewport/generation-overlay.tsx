@@ -6,10 +6,14 @@ type GenerationOverlayProps = {
   isGenerating: boolean;
   prompt?: string;
   progress?: number; // 0-100
+  startedAt?: number | null;
 };
 
-export function GenerationOverlay({ isGenerating, prompt, progress }: GenerationOverlayProps) {
+export function GenerationOverlay({ isGenerating, prompt, progress, startedAt }: GenerationOverlayProps) {
   const [dots, setDots] = useState("");
+  const [elapsed, setElapsed] = useState(
+    () => (startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0)
+  );
 
   useEffect(() => {
     if (!isGenerating) return;
@@ -18,6 +22,14 @@ export function GenerationOverlay({ isGenerating, prompt, progress }: Generation
     }, 500);
     return () => clearInterval(interval);
   }, [isGenerating]);
+
+  useEffect(() => {
+    if (!isGenerating || !startedAt) return;
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isGenerating, startedAt]);
 
   if (!isGenerating) return null;
 
@@ -50,7 +62,9 @@ export function GenerationOverlay({ isGenerating, prompt, progress }: Generation
         )}
 
         <p className="text-[10px] text-white/30">
-          This usually takes 30–60 seconds
+          {elapsed < 60
+            ? `${elapsed}s elapsed — usually takes 30\u201360 seconds`
+            : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s elapsed — almost there`}
         </p>
       </div>
     </div>
