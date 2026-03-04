@@ -17,6 +17,7 @@ export function useAutoSave(projectId: string | null) {
     if (serialized === lastSavedRef.current) return;
 
     savingRef.current = true;
+    useEditorStore.setState({ isSaving: true });
     try {
       const res = await fetch(`/api/projects/${projectId}/scene`, {
         method: "PUT",
@@ -25,7 +26,12 @@ export function useAutoSave(projectId: string | null) {
       });
       if (res.ok) {
         lastSavedRef.current = serialized;
+        useEditorStore.setState({ isDirty: false, isSaving: false, lastSavedAt: Date.now() });
+      } else {
+        useEditorStore.setState({ isSaving: false });
       }
+    } catch {
+      useEditorStore.setState({ isSaving: false });
     } finally {
       savingRef.current = false;
     }
@@ -92,6 +98,7 @@ export function useAutoSave(projectId: string | null) {
   // Update the lastSaved ref when a scene is first loaded
   const markClean = useCallback((sceneState: unknown) => {
     lastSavedRef.current = JSON.stringify(sceneState);
+    useEditorStore.setState({ isDirty: false, lastSavedAt: Date.now() });
   }, []);
 
   return { save, markClean };

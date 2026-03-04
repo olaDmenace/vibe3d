@@ -93,6 +93,18 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      // Camera shortcuts
+      if (e.key === "Home") {
+        e.preventDefault();
+        window.__vibe3d_resetCamera?.();
+        return;
+      }
+      if (!ctrl && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        window.__vibe3d_zoomToFit?.();
+        return;
+      }
+
       // Tool shortcuts
       if (!ctrl) {
         switch (e.key.toLowerCase()) {

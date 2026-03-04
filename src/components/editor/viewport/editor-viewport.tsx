@@ -8,6 +8,7 @@ import { SceneRenderer } from "./scene-renderer";
 import { EnvironmentSetup } from "./environment-setup";
 import { LightingRenderer } from "./lighting-renderer";
 import { TransformGizmo } from "./transform-gizmo";
+import { CameraManager } from "./camera-manager";
 import { useEditorStore } from "@/store/editor-store";
 
 export function EditorViewport() {
@@ -37,6 +38,7 @@ export function EditorViewport() {
           <ClickableScene />
           <TransformGizmo />
           <OrbitControls makeDefault target={camera.target} />
+          <CameraManager />
         </Suspense>
       </Canvas>
     </div>

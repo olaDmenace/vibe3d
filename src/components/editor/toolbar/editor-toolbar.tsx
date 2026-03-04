@@ -123,10 +123,8 @@ export function EditorToolbar({
   }, [dropdownOpen]);
 
   return (
-    <div
-      className="absolute z-20 flex items-center gap-2"
-      style={{ left: 262, top: 16 }}
-    >
+    <div className="flex items-center gap-2">
+
       {/* ===== Primitives pill ===== */}
       <div
         className="flex items-center"
@@ -329,6 +327,57 @@ export function EditorToolbar({
               strokeWidth="0.8"
               strokeLinecap="round"
             />
+          </svg>
+        </button>
+      </div>
+
+      {/* ===== Camera pill ===== */}
+      <div
+        className="flex items-center gap-1 px-2"
+        style={{
+          height: 48,
+          background: "rgba(0, 0, 0, 0.2)",
+          borderRadius: 20,
+        }}
+      >
+        {/* Reset Camera */}
+        <button
+          onClick={() => window.__vibe3d_resetCamera?.()}
+          title="Reset Camera (Home)"
+          className="flex items-center justify-center cursor-pointer transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.8 }}>
+            <path d="M2 8.5L8 3L14 8.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3.5 7.5V13H6.5V10H9.5V13H12.5V7.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {/* Zoom to Fit */}
+        <button
+          onClick={() => window.__vibe3d_zoomToFit?.()}
+          title="Zoom to Fit (F)"
+          className="flex items-center justify-center cursor-pointer transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.8 }}>
+            <path d="M2 5V2H5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14 5V2H11" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2 11V14H5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14 11V14H11" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <rect x="5" y="5" width="6" height="6" rx="1" stroke="white" strokeWidth="1" />
           </svg>
         </button>
       </div>

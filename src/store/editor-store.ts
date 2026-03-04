@@ -64,6 +64,11 @@ type EditorStore = {
   future: UndoEntry[];
   maxHistorySize: number;
 
+  // Save status
+  isDirty: boolean;
+  isSaving: boolean;
+  lastSavedAt: number | null;
+
   // UI State
   activeTool: ActiveTool;
   sidebarTab: SidebarTab;
@@ -365,6 +370,10 @@ export const useEditorStore = create<EditorStore>()(
     future: [],
     maxHistorySize: 30, // Keep history compact to limit memory usage; command-based entries are lightweight but scene snapshots in inverse actions can grow
 
+    isDirty: false,
+    isSaving: false,
+    lastSavedAt: null,
+
     activeTool: "select",
     sidebarTab: "hierarchy",
     highlightedMeshName: null,
@@ -390,6 +399,7 @@ export const useEditorStore = create<EditorStore>()(
             }
           }
           state.future = [];
+          state.isDirty = true;
           applyAction(state, action);
         });
       } else {
@@ -436,6 +446,7 @@ export const useEditorStore = create<EditorStore>()(
         state.future = [];
         state.selectedObjectId = null;
         state.multiSelectedIds = [];
+        state.isDirty = false;
       });
     },
 

@@ -7,6 +7,7 @@ import type { EditorAction } from "@/types/actions";
 import { SharingModal } from "@/components/editor/sharing-modal";
 import { MeshPartsPanel } from "./mesh-parts-panel";
 import { MaterialEditor } from "./material-editor";
+import { LightingEditor } from "./lighting-editor";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -549,6 +550,34 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
                   )}
                 </button>
               ))}
+              {/* Divider */}
+              <div className="mx-2 border-t border-white/[0.06]" />
+              {/* Export Selected */}
+              <button
+                type="button"
+                disabled={!selectedObjectId}
+                onClick={async () => {
+                  if (!selectedObjectId || !selectedObject) return;
+                  setShowExportMenu(false);
+                  setExporting(true);
+                  try {
+                    const { exportScene, downloadBlob } = await import("@/lib/three/export-scene");
+                    const filteredScene = {
+                      ...scene,
+                      objects: { [selectedObjectId]: selectedObject },
+                    };
+                    const blob = await exportScene(filteredScene, "glb");
+                    downloadBlob(blob, `${selectedObject.name}.glb`);
+                  } catch (err) {
+                    console.error("Export selected failed:", err);
+                  } finally {
+                    setExporting(false);
+                  }
+                }}
+                className="flex w-full items-center px-3 py-2 text-left font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Export Selected (.GLB)
+              </button>
             </div>
           )}
         </div>
@@ -653,6 +682,10 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
             <div className="mx-3 border-t border-white/[0.06]" />
           </>
         )}
+
+        {/* ----- Lighting Editor section ----- */}
+        <LightingEditor />
+        <div className="mx-3 border-t border-white/[0.06]" />
 
         {/* ----- Color Assets section ----- */}
         <AssetSection label="Color Assets" defaultExpanded={colorAssets.length > 0}>

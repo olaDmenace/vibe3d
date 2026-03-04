@@ -721,9 +721,42 @@ export default function DashboardPage() {
 
           {/* Project cards — grid or list view */}
           {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[rgba(222,220,209,0.3)] border-t-[#faf9f5]" />
-            </div>
+            viewMode === "grid" ? (
+              <div className="grid grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-[13px] border border-[var(--border-strong)]"
+                  >
+                    <div
+                      className="animate-pulse bg-[var(--card-bg)]"
+                      style={{ height: "calc(257.11px - 59px)" }}
+                    />
+                    <div className="flex h-[59px] items-center gap-3 border-t border-[var(--border-strong)] bg-[var(--card-bg-secondary)] px-[17px]">
+                      <div className="h-4 w-4 animate-pulse rounded bg-white/10" />
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <div className="h-3 w-3/4 animate-pulse rounded bg-white/10" />
+                        <div className="h-2.5 w-1/2 animate-pulse rounded bg-white/[0.05]" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex h-[60px] items-center gap-4 rounded-[13px] border border-[var(--border-strong)] bg-[var(--card-bg-secondary)] px-4"
+                  >
+                    <div className="h-[42px] w-[64px] shrink-0 animate-pulse rounded-[6px] bg-[var(--card-bg)]" />
+                    <div className="h-4 w-4 animate-pulse rounded bg-white/10" />
+                    <div className="h-3 flex-1 animate-pulse rounded bg-white/10" />
+                    <div className="h-2.5 w-24 shrink-0 animate-pulse rounded bg-white/[0.05]" />
+                  </div>
+                ))}
+              </div>
+            )
           ) : filteredProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 rounded-[13px] border border-dashed border-[var(--border-strong)] py-24">
               <Image src="/assets/icons/dashboard-3d-view.svg" alt="" width={48} height={48} className="opacity-30" />
