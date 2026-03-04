@@ -510,9 +510,8 @@ export default function DashboardPage() {
             className="relative w-[626px] overflow-hidden rounded-[20px] bg-[var(--card-bg-secondary)] shadow-[0px_4px_20px_rgba(0,0,0,0.035),0px_0px_0px_0.5px_rgba(222,220,209,0.15)]"
             style={{ height: 145 }}
           >
-            {/* Gradient glow — inlined SVG from Figma export (inline SVG needed
-                 so mix-blend-mode composites against the form bg, not a
-                 transparent wrapper) */}
+            {/* Gradient glow — sits behind the textarea, visible in the
+                 bottom model-selector strip where the textarea doesn't cover */}
             <svg
               className="pointer-events-none absolute"
               style={{ left: 30, top: 27 }}
@@ -560,9 +559,9 @@ export default function DashboardPage() {
               </defs>
             </svg>
 
-            {/* Inner textarea container — Figma: left:2, top:3, 622×108 */}
+            {/* Inner textarea container — solid bg so glow can't bleed through */}
             <div
-              className="absolute flex flex-col rounded-[18px] bg-[var(--input-bg)]"
+              className="absolute flex flex-col rounded-[18px] bg-[var(--card-bg-secondary)]"
               style={{
                 left: 2,
                 top: 2,
@@ -573,20 +572,6 @@ export default function DashboardPage() {
             >
               {/* Textarea */}
               <div className="relative flex-1 px-4 pt-3">
-                {/* Blue cursor indicator bar — shown when empty */}
-                {prompt.length === 0 && (
-                  <div
-                    className="absolute"
-                    style={{
-                      left: 16,
-                      top: 14,
-                      width: 0.92,
-                      height: 13.85,
-                      background: "#39A6FF",
-                      borderRadius: 1,
-                    }}
-                  />
-                )}
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -594,7 +579,6 @@ export default function DashboardPage() {
                   className="h-full w-full resize-none bg-transparent text-[11px] leading-[16px] tracking-[0.3px] text-[var(--text-primary)]/90 placeholder:text-[var(--text-primary)]/40 outline-none"
                   style={{
                     fontFamily: "'Spline Sans', sans-serif",
-                    paddingLeft: prompt.length === 0 ? 6 : 0,
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -620,7 +604,7 @@ export default function DashboardPage() {
                   className="flex h-[31px] w-[31px] items-center justify-center rounded-[5.4px] transition-opacity hover:opacity-80"
                   title="Upload an image for 3D generation"
                 >
-                  <Image src="/assets/icons/dashboard-attach.svg" alt="Attach" width={20} height={20} style={{ opacity: 0.7 }} />
+                  <Image src="/assets/icons/dashboard-attach.svg" alt="Attach" width={40} height={40} style={{ opacity: 0.7 }} />
                 </button>
                 <div className="flex items-center gap-2">
                   {/* Voice button */}
@@ -633,7 +617,7 @@ export default function DashboardPage() {
                     {isListening ? (
                       <MicOff size={18} className="text-red-400" />
                     ) : (
-                      <Image src="/assets/icons/dashboard-audio.svg" alt="Voice" width={20} height={20} style={{ opacity: 0.7 }} />
+                      <Image src="/assets/icons/dashboard-audio.svg" alt="Voice" width={40} height={40} style={{ opacity: 0.7 }} />
                     )}
                   </button>
                   {/* Submit button */}
@@ -661,7 +645,7 @@ export default function DashboardPage() {
                 className="text-[11px] tracking-[0.3px] text-[var(--text-primary)]"
                 style={{ fontFamily: "'Spline Sans', sans-serif" }}
               >
-                NanoBanana
+                Vibe3D AI
               </span>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
                 <path d="M5 6.5L8 9.5L11 6.5" stroke="var(--text-primary)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />

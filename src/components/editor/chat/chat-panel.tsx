@@ -818,20 +818,6 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         >
           {/* Textarea area */}
           <div className="relative flex-1 px-4 pt-3">
-            {/* Blue cursor indicator bar */}
-            {message.length === 0 && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 16,
-                  top: 14,
-                  width: 0.92,
-                  height: 13.85,
-                  background: "#39A6FF",
-                  borderRadius: 1,
-                }}
-              />
-            )}
             <textarea
               ref={textareaRef}
               value={message}
@@ -845,7 +831,6 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 fontSize: 11,
                 letterSpacing: "0.3px",
                 lineHeight: "16px",
-                paddingLeft: message.length === 0 ? 6 : 0,
               }}
             />
             {!isAuthenticated && (
@@ -858,19 +843,6 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               </a>
             )}
           </div>
-
-          {/* Image upload preview */}
-          {(uploadingImage || imagePreview) && (
-            <div className="flex items-center gap-2 px-3 pb-1">
-              {imagePreview && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imagePreview} alt="Upload" className="h-8 w-8 rounded object-cover" />
-              )}
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'Spline Sans', sans-serif" }}>
-                {uploadingImage ? "Uploading & generating..." : "Processing image..."}
-              </span>
-            </div>
-          )}
 
           {/* Bottom row inside textarea container */}
           <div className="flex items-center justify-between px-3 pb-3">
@@ -892,9 +864,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               onClick={() => imageInputRef.current?.click()}
               className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors disabled:opacity-40"
               style={{
-                width: 31,
-                height: 31,
-                borderRadius: 5.4,
+                width: 36,
+                height: 36,
+                borderRadius: 8,
                 background: "transparent",
                 border: "none",
               }}
@@ -902,8 +874,8 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               <Image
                 src="/assets/icons/dashboard-attach.svg"
                 alt="Upload Image"
-                width={20}
-                height={20}
+                width={40}
+                height={40}
                 style={{ opacity: 0.7 }}
               />
             </button>
@@ -940,8 +912,8 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 title="Voice Input"
                 className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   borderRadius: 8,
                   background: "transparent",
                   border: "none",
@@ -950,14 +922,36 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 <Image
                   src="/assets/icons/dashboard-audio.svg"
                   alt="Audio"
-                  width={20}
-                  height={20}
+                  width={40}
+                  height={40}
                   style={{ opacity: 0.7 }}
                 />
               </button>
             </div>
           </div>
         </div>
+
+        {/* Image upload preview — below the input area */}
+        {(uploadingImage || imagePreview) && (
+          <div
+            className="flex items-center gap-2 px-4"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 33,
+              height: 28,
+            }}
+          >
+            {imagePreview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreview} alt="Upload" className="h-6 w-6 rounded object-cover" />
+            )}
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'Spline Sans', sans-serif" }}>
+              {uploadingImage ? "Uploading & generating..." : "Processing image..."}
+            </span>
+          </div>
+        )}
 
         {/* Model selector row (below the inner container) */}
         <div

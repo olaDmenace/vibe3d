@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TrustMarquee } from "@/components/trust-marquee";
 
 // Step 2: "How did you hear about us?"
 const REFERRAL_SOURCES = [
@@ -25,13 +26,6 @@ const USE_CASES = [
   { id: "animation", label: "Animation & Film", icon: "/assets/icons/onboarding-animation.svg" },
   { id: "education", label: "Education & Learning", icon: "/assets/icons/onboarding-education.svg" },
   { id: "fun", label: "Just for Fun", icon: "/assets/icons/onboarding-fun.svg" },
-];
-
-const TRUST_LOGOS = [
-  { src: "/assets/logos/scale.png", alt: "Scale", width: 64, height: 20 },
-  { src: "/assets/logos/google.png", alt: "Google", width: 64, height: 20 },
-  { src: "/assets/logos/shopify.png", alt: "Shopify", width: 72, height: 20 },
-  { src: "/assets/logos/accenture.png", alt: "Accenture", width: 80, height: 20 },
 ];
 
 type Step = "name" | "referral" | "use-cases";
@@ -174,26 +168,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Trust logos */}
-        <div className="mt-auto pt-16">
-          <p className="text-sm text-[rgba(255,255,255,0.52)]">
-            Trusted by teams at{" "}
-            <span className="text-[rgba(255,255,255,0.92)]">
-              world&apos;s leading organizations
-            </span>
-          </p>
-          <div className="mt-6 flex flex-wrap items-center gap-[57px] opacity-50">
-            {TRUST_LOGOS.map((logo) => (
-              <Image
-                key={logo.alt}
-                src={logo.src}
-                alt={logo.alt}
-                width={logo.width}
-                height={logo.height}
-                className="h-5 w-auto object-contain"
-              />
-            ))}
-          </div>
-        </div>
+        <TrustMarquee />
       </div>
 
       {/* Right — Editor preview mockup */}

@@ -156,3 +156,17 @@ button,
 select {
   cursor: pointer;
 }
+
+/* Marquee animation for trust logos */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.trust-marquee-track {
+  animation: marquee 50s linear infinite;
+}
