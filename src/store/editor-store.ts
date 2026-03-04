@@ -68,6 +68,7 @@ type EditorStore = {
   activeTool: ActiveTool;
   sidebarTab: SidebarTab;
   highlightedMeshName: string | null;
+  snapToGrid: boolean;
 
   // Actions
   dispatch: (action: EditorAction) => void;
@@ -367,6 +368,7 @@ export const useEditorStore = create<EditorStore>()(
     activeTool: "select",
     sidebarTab: "hierarchy",
     highlightedMeshName: null,
+    snapToGrid: true,
 
     dispatch: (action: EditorAction) => {
       if (!TRANSIENT_ACTIONS.includes(action.type)) {

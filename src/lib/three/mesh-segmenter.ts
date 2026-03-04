@@ -461,21 +461,21 @@ function generatePartName(
   partBounds: PartBounds | null,
   allBounds: (PartBounds | null)[],
 ): string {
-  // If we have a color-based split, use color name
+  // If we have a color-based split, use color name (no prompt prefix)
   if (colorKey && colorKey !== "default") {
-    const colorName = colorToName(colorKey);
-    return `${promptHint}_${colorName}_Part`.replace(/\s+/g, "_");
+    const colorName = colorToName(colorKey).toLowerCase();
+    return colorName.replace(/\s+/g, "_");
   }
 
   // If no bounds data, fall back to indexed
   if (!partBounds) {
-    return `${promptHint}_Part_${index + 1}`.replace(/\s+/g, "_");
+    return `part_${index + 1}`;
   }
 
   // Compute overall model bounds from all parts
   const validBounds = allBounds.filter((b): b is PartBounds => b !== null);
   if (validBounds.length === 0) {
-    return `${promptHint}_Part_${index + 1}`.replace(/\s+/g, "_");
+    return `part_${index + 1}`;
   }
 
   let modelMinX = Infinity, modelMinY = Infinity, modelMinZ = Infinity;
@@ -561,7 +561,7 @@ function generatePartName(
     label = `${label}_${index + 1}`;
   }
 
-  return `${promptHint}_${label}`.replace(/\s+/g, "_");
+  return label;
 }
 
 /* ------------------------------------------------------------------ */

@@ -6,6 +6,7 @@ import type { ExportFormat } from "@/lib/three/export-scene";
 import type { EditorAction } from "@/types/actions";
 import { SharingModal } from "@/components/editor/sharing-modal";
 import { MeshPartsPanel } from "./mesh-parts-panel";
+import { MaterialEditor } from "./material-editor";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -382,6 +383,7 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("glb");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const highlightedMeshName = useEditorStore((s) => s.highlightedMeshName);
 
   const selectedObject = selectedObjectId
     ? scene.objects[selectedObjectId] ?? null
@@ -640,6 +642,14 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
         {selectedObject && (
           <>
             <MeshPartsPanel object={selectedObject} />
+            <div className="mx-3 border-t border-white/[0.06]" />
+          </>
+        )}
+
+        {/* ----- Material Editor section ----- */}
+        {selectedObject && (
+          <>
+            <MaterialEditor object={selectedObject} meshName={highlightedMeshName} />
             <div className="mx-3 border-t border-white/[0.06]" />
           </>
         )}

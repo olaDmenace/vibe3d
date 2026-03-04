@@ -73,6 +73,7 @@ export function MeshPartsPanel({ object }: MeshPartsPanelProps) {
           return (
             <div
               key={name}
+              title={`Click to select part: ${name}`}
               className="flex h-7 items-center gap-2 rounded-[8px] px-2 cursor-pointer transition-colors"
               style={{
                 background: isSelected
@@ -99,7 +100,7 @@ export function MeshPartsPanel({ object }: MeshPartsPanelProps) {
               {/* Color swatch / picker */}
               <label className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <div
-                  className="w-4 h-4 rounded border border-neutral-600 cursor-pointer"
+                  className="w-6 h-6 rounded border-2 border-neutral-500 cursor-pointer hover:border-indigo-400 transition-colors"
                   style={{ backgroundColor: color || "#888888" }}
                 />
                 <input

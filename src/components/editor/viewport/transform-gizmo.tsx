@@ -15,6 +15,8 @@ export function TransformGizmo() {
   const objects = useEditorStore((s) => s.scene.objects);
   const activeTool = useEditorStore((s) => s.activeTool);
   const dispatch = useEditorStore((s) => s.dispatch);
+  const snapToGrid = useEditorStore((s) => s.snapToGrid);
+  const gridSize = useEditorStore((s) => s.scene.environment.gridSize);
   const { scene } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof TransformControls>>(null);
 
@@ -57,6 +59,9 @@ export function TransformGizmo() {
           ref={controlsRef}
           object={targetRef.current}
           mode={mode}
+          translationSnap={snapToGrid ? (gridSize > 10 ? 1 : 0.5) : undefined}
+          rotationSnap={snapToGrid ? Math.PI / 12 : undefined}
+          scaleSnap={snapToGrid ? 0.1 : undefined}
           onMouseUp={() => {
             if (!targetRef.current || !selectedObjectId) return;
 

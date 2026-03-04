@@ -221,6 +221,19 @@ Phase 6 — Final Features Before Launch
 - [x] highlightedMeshName state: added to EditorStore, auto-cleared on object deselection (SELECT_OBJECT dispatch)
 - [x] Spatial mesh naming: replaced index-based naming with spatial+size analysis — parts named "body", "top", "base", "left_section", "right_section", "front", "back", "detail" based on bounding box position relative to model center and volume ratio
 
+### Launch Sprint — Complete Fix Pass — 2026-03-04
+- [x] Fix 1 (BLOCKER): Chat routing — replaced broad generation regex with `isGenerationRequest()` function + exclusion patterns for edit commands ("make the windows pink" no longer triggers 3D generation)
+- [x] Fix 2: Object naming — improved `cleanPromptForName()` (strips "please", "new", trailing "for my scene" etc.) + removed prompt prefix from mesh segmenter part names
+- [x] Fix 3: Auto-offset — new generated objects spawn offset from existing objects via `getSpawnPosition()` utility, no more stacking at [0,0,0]
+- [x] Fix 4: Material editor — `MaterialEditor` component with color picker + roughness/metalness/opacity sliders, per-mesh targeting via `highlightedMeshName`
+- [x] Fix 5: Delete objects — right-click viewport context menu (duplicate/hide/lock/delete) + keyboard shortcuts (Delete/Backspace)
+- [x] Fix 6: Undo/Redo buttons — visible toolbar buttons with disabled state, connected to store undo/redo
+- [x] Fix 7: Primitives toolbar — added torus primitive, uses `getSpawnPosition()` for offset spawning
+- [x] Fix 8: Parts panel — enlarged color swatches (w-6 h-6 with border), added title attributes
+- [x] Fix 9: Scene hierarchy — right-click context menu (rename/duplicate/hide/delete), double-click inline rename with Enter/Escape support
+- [x] Fix 10: Multi-object selection — shift-click in hierarchy, blue border for multi-selected items, batch delete via keyboard
+- [x] Fix 11: Snap-to-grid — toggle button in toolbar with visual state, TransformControls snap props (translation/rotation/scale), store `snapToGrid` boolean
+
 ## In Progress
 - (none)
 

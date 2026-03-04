@@ -293,11 +293,15 @@ function MeshPartsList({
 export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
   const objects = useEditorStore((s) => s.scene.objects);
   const selectedObjectId = useEditorStore((s) => s.selectedObjectId);
+  const multiSelectedIds = useEditorStore((s) => s.multiSelectedIds);
   const dispatch = useEditorStore((s) => s.dispatch);
 
   const [scenesExpanded, setScenesExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedObjects, setExpandedObjects] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; objectId: string } | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [userName, setUserName] = useState("User");
   const [userPlan, setUserPlan] = useState("Free plan");
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
@@ -347,8 +351,31 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
     });
   };
 
-  const handleSelectObject = (id: string) => {
-    dispatch({ type: "SELECT_OBJECT", id });
+  const handleSelectObject = (id: string, e?: React.MouseEvent) => {
+    if (e?.shiftKey) {
+      const current = useEditorStore.getState().multiSelectedIds;
+      const newIds = current.includes(id)
+        ? current.filter((i) => i !== id)
+        : [...current, id];
+      dispatch({ type: "MULTI_SELECT", ids: newIds });
+    } else {
+      dispatch({ type: "SELECT_OBJECT", id });
+    }
+  };
+
+  const handleRename = (id: string) => {
+    const obj = objects[id];
+    if (obj) {
+      setRenamingId(id);
+      setRenameValue(obj.name);
+    }
+  };
+
+  const submitRename = () => {
+    if (renamingId && renameValue.trim()) {
+      dispatch({ type: "RENAME_OBJECT", id: renamingId, name: renameValue.trim() });
+    }
+    setRenamingId(null);
   };
 
   return (
@@ -528,6 +555,7 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
 
         {objectList.map((obj) => {
           const isSelected = obj.id === selectedObjectId;
+          const isMultiSelected = multiSelectedIds.includes(obj.id);
           const isExpanded = expandedObjects.has(obj.id);
           const meshNames = (obj.metadata?.meshNames as string[]) ?? [];
           const hasMeshParts = meshNames.length >= 2;
@@ -539,15 +567,22 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
                 className="flex w-full items-center transition-colors"
                 style={{
                   height: 32,
-                  background: isSelected
+                  background: isSelected || isMultiSelected
                     ? "rgba(255, 255, 255, 0.08)"
                     : "transparent",
                   borderLeft: isSelected
                     ? "2px solid rgba(255, 255, 255, 0.3)"
-                    : "2px solid transparent",
+                    : isMultiSelected
+                      ? "2px solid rgba(124, 196, 248, 0.3)"
+                      : "2px solid transparent",
                 }}
-                onClick={() => handleSelectObject(obj.id)}
-                onDoubleClick={() => { if (hasMeshParts) toggleObjectExpanded(obj.id); }}
+                onClick={(e) => handleSelectObject(obj.id, e)}
+                onDoubleClick={() => handleRename(obj.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  handleSelectObject(obj.id);
+                  setContextMenu({ x: e.clientX, y: e.clientY, objectId: obj.id });
+                }}
               >
                 {/* Expand icon */}
                 <div
@@ -563,18 +598,43 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
                   <TreeExpandIcon expanded={isExpanded && hasMeshParts} />
                 </div>
 
-                {/* Object name */}
-                <span
-                  className="flex-1 truncate text-left"
-                  style={{
-                    fontSize: 11,
-                    color: isSelected ? "#E5E5E7" : "rgba(229, 229, 231, 0.7)",
-                    fontFamily: "'Aeonik Pro', sans-serif",
-                    paddingLeft: 2.5,
-                  }}
-                >
-                  {obj.name}
-                </span>
+                {/* Object name (inline rename) */}
+                {renamingId === obj.id ? (
+                  <input
+                    autoFocus
+                    className="flex-1 bg-transparent outline-none"
+                    style={{
+                      fontSize: 11,
+                      color: "#E5E5E7",
+                      fontFamily: "'Aeonik Pro', sans-serif",
+                      border: "1px solid rgba(124, 196, 248, 0.4)",
+                      borderRadius: 3,
+                      padding: "1px 4px",
+                      marginLeft: 2,
+                    }}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={submitRename}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") submitRename();
+                      if (e.key === "Escape") setRenamingId(null);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span
+                    className="flex-1 truncate text-left"
+                    style={{
+                      fontSize: 11,
+                      color: isSelected ? "#E5E5E7" : "rgba(229, 229, 231, 0.7)",
+                      fontFamily: "'Aeonik Pro', sans-serif",
+                      paddingLeft: 2.5,
+                    }}
+                  >
+                    {obj.name}
+                  </span>
+                )}
 
                 {/* Part count badge for models with mesh parts */}
                 {hasMeshParts && (
@@ -617,6 +677,67 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
           );
         })}
       </div>
+
+      {/* ========== HIERARCHY CONTEXT MENU ========== */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-[9999]" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-[10000] flex flex-col gap-0.5 py-1.5"
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+              width: 160,
+              background: "rgba(30, 30, 24, 0.95)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: 10,
+              backdropFilter: "blur(16px)",
+              boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.4)",
+            }}
+          >
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              onClick={() => {
+                handleRename(contextMenu.objectId);
+                setContextMenu(null);
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              onClick={() => {
+                const newId = crypto.randomUUID();
+                dispatch({ type: "DUPLICATE_OBJECT", sourceId: contextMenu.objectId, newId });
+                dispatch({ type: "SELECT_OBJECT", id: newId });
+                setContextMenu(null);
+              }}
+            >
+              Duplicate
+            </button>
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              onClick={() => {
+                const obj = objects[contextMenu.objectId];
+                if (obj) dispatch({ type: "SET_VISIBILITY", id: contextMenu.objectId, visible: !obj.visible });
+                setContextMenu(null);
+              }}
+            >
+              {objects[contextMenu.objectId]?.visible ? "Hide" : "Show"}
+            </button>
+            <div style={{ height: 1, background: "rgba(255, 255, 255, 0.06)", margin: "2px 8px" }} />
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-red-400/80 hover:bg-red-500/10 transition-colors cursor-pointer"
+              onClick={() => {
+                dispatch({ type: "DELETE_OBJECT", id: contextMenu.objectId });
+                setContextMenu(null);
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ========== BOTTOM SECTION ========== */}
       <div

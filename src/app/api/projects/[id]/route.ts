@@ -58,6 +58,76 @@ export async function GET(
     return apiError(sceneError.message, 500, "DB_ERROR");
   }
 
+  // Refresh expired signed URLs for any models in the scene
+  try {
+    const sceneGraph = scene.scene_graph as Record<string, unknown> | null;
+    const objects = (sceneGraph?.objects ?? {}) as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    // Collect objects that need URL refresh
+    const needsRefresh: {
+      objId: string;
+      storagePath?: string;
+      assetId?: string;
+    }[] = [];
+
+    for (const [objId, obj] of Object.entries(objects)) {
+      const meta = obj.metadata as Record<string, unknown> | undefined;
+      if (!meta?.modelUrl && !meta?.storagePath) continue;
+
+      if (meta.storagePath) {
+        needsRefresh.push({ objId, storagePath: meta.storagePath as string });
+      } else {
+        needsRefresh.push({ objId, assetId: obj.assetId as string });
+      }
+    }
+
+    if (needsRefresh.length > 0) {
+      // Fetch all project assets in one query to build lookup maps
+      const { data: assets } = await supabase
+        .from("assets")
+        .select("id, storage_path, metadata")
+        .eq("project_id", id);
+
+      const byAssetId = new Map<string, string>();
+      const byTaskId = new Map<string, string>();
+      for (const a of assets ?? []) {
+        byAssetId.set(a.id, a.storage_path);
+        const tid = (a.metadata as Record<string, unknown>)?.taskId as
+          | string
+          | undefined;
+        if (tid) byTaskId.set(tid, a.storage_path);
+      }
+
+      // Resolve storage paths and generate fresh signed URLs
+      for (const item of needsRefresh) {
+        let sp = item.storagePath;
+        if (!sp && item.assetId) {
+          if (item.assetId.startsWith("generated:")) {
+            sp = byTaskId.get(item.assetId.replace("generated:", ""));
+          } else {
+            sp = byAssetId.get(item.assetId);
+          }
+        }
+        if (!sp) continue;
+
+        const { data: urlData } = await supabase.storage
+          .from("assets")
+          .createSignedUrl(sp, 3600);
+
+        if (urlData?.signedUrl) {
+          const meta = objects[item.objId].metadata as Record<string, unknown>;
+          meta.modelUrl = urlData.signedUrl;
+          meta.storagePath = sp;
+        }
+      }
+    }
+  } catch {
+    // URL refresh is best-effort — don't fail the request
+  }
+
   return NextResponse.json({ project, scene });
 }
 

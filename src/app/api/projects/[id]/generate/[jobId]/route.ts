@@ -72,6 +72,7 @@ export async function GET(
 
   // If complete, download and store the model, then return a Supabase signed URL
   let signedModelUrl: string | null = null;
+  let resolvedStoragePath: string | null = null;
   let meshNames: string[] = [];
   let meshCount = 0;
 
@@ -187,6 +188,7 @@ export async function GET(
 
     // Generate a signed URL for the model in Supabase Storage
     const assetPath = existing?.storage_path ?? storagePath;
+    resolvedStoragePath = assetPath;
     const { data: urlData } = await supabase.storage
       .from("assets")
       .createSignedUrl(assetPath, 3600); // 1 hour expiry
@@ -201,6 +203,7 @@ export async function GET(
     status: status.status,
     progress: status.progress,
     modelUrl: signedModelUrl ?? status.modelUrl,
+    storagePath: resolvedStoragePath,
     thumbnailUrl: status.thumbnailUrl,
     meshNames,
     meshCount,

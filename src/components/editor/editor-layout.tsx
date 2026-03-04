@@ -6,6 +6,7 @@ import { ChatPanel } from "./chat/chat-panel";
 import { LeftSidebar } from "./panels/left-sidebar";
 import { RightSidebar } from "./panels/right-sidebar";
 import { GenerationOverlay } from "./viewport/generation-overlay";
+import { ViewportContextMenu } from "./viewport/context-menu";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useAuthStatus } from "@/hooks/use-auth-status";
 import { useGenerationStore } from "@/store/generation-store";
@@ -51,6 +52,9 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
 
       {/* Floating chat input (absolute positioned) */}
       <ChatPanel projectId={projectId} isAuthenticated={isAuthenticated} />
+
+      {/* Right-click context menu */}
+      <ViewportContextMenu />
 
       {/* Guided tour overlay */}
       <EditorTour />

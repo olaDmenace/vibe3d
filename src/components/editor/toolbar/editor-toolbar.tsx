@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditorStore } from "@/store/editor-store";
+import { getSpawnPosition } from "@/lib/scene-utils";
 import { Box, Circle, Minus, Triangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -28,6 +29,24 @@ const PRIMITIVES: { type: string; icon: React.ReactNode; label: string }[] = [
     label: "Cylinder",
   },
   { type: "cone", icon: <Triangle size={16} />, label: "Cone" },
+  {
+    type: "torus",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+    label: "Torus",
+  },
 ];
 
 type EditorToolbarProps = {
@@ -44,12 +63,17 @@ export function EditorToolbar({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dispatch = useEditorStore((s) => s.dispatch);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const pastLen = useEditorStore((s) => s.past.length);
+  const futureLen = useEditorStore((s) => s.future.length);
+  const snapToGrid = useEditorStore((s) => s.snapToGrid);
 
   const addPrimitive = useCallback(
     (type: string) => {
       const id = crypto.randomUUID();
-      const objectCount = Object.keys(useEditorStore.getState().scene.objects).length;
-      const offset = objectCount * 1.5;
+      const pos = getSpawnPosition(useEditorStore.getState().scene);
+      if (type !== "plane") pos[1] = 0.5;
       dispatch({
         type: "ADD_OBJECT",
         id,
@@ -60,7 +84,7 @@ export function EditorToolbar({
           visible: true,
           locked: false,
           transform: {
-            position: [offset, 0.5, 0],
+            position: pos,
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
           },
@@ -100,9 +124,10 @@ export function EditorToolbar({
 
   return (
     <div
-      className="absolute z-20"
+      className="absolute z-20 flex items-center gap-2"
       style={{ left: 262, top: 16 }}
     >
+      {/* ===== Primitives pill ===== */}
       <div
         className="flex items-center"
         style={{
@@ -132,7 +157,6 @@ export function EditorToolbar({
               border: "none",
             }}
           >
-            {/* Plus Icon 16x16 */}
             <svg
               width="16"
               height="16"
@@ -214,7 +238,6 @@ export function EditorToolbar({
             border: "none",
           }}
         >
-          {/* Chat Bubble Icon 16x16 */}
           <svg
             width="16"
             height="16"
@@ -229,6 +252,82 @@ export function EditorToolbar({
               strokeWidth="1.2"
               strokeLinecap="round"
               strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {/* ===== Undo / Redo / Snap pill ===== */}
+      <div
+        className="flex items-center gap-1 px-2"
+        style={{
+          height: 48,
+          background: "rgba(0, 0, 0, 0.2)",
+          borderRadius: 20,
+        }}
+      >
+        {/* Undo */}
+        <button
+          onClick={undo}
+          disabled={pastLen === 0}
+          title="Undo (Ctrl+Z)"
+          className="flex items-center justify-center cursor-pointer disabled:opacity-25 transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.8 }}>
+            <path d="M4 6h6a3 3 0 0 1 0 6H7" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6 3L4 6l2 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </button>
+
+        {/* Redo */}
+        <button
+          onClick={redo}
+          disabled={futureLen === 0}
+          title="Redo (Ctrl+Shift+Z)"
+          className="flex items-center justify-center cursor-pointer disabled:opacity-25 transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.8 }}>
+            <path d="M12 6H6a3 3 0 0 0 0 6h3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10 3l2 3-2 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </button>
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.08)", borderRadius: 1 }} />
+
+        {/* Snap Toggle */}
+        <button
+          onClick={() => useEditorStore.setState({ snapToGrid: !snapToGrid })}
+          title={`Snap to Grid: ${snapToGrid ? "ON" : "OFF"}`}
+          className="flex items-center justify-center cursor-pointer transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: snapToGrid ? "rgba(124, 196, 248, 0.15)" : "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: snapToGrid ? 1 : 0.5 }}>
+            <path
+              d="M1 4h14M1 8h14M1 12h14M4 1v14M8 1v14M12 1v14"
+              stroke={snapToGrid ? "#7CC4F8" : "white"}
+              strokeWidth="0.8"
+              strokeLinecap="round"
             />
           </svg>
         </button>

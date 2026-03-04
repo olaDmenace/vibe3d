@@ -7,6 +7,7 @@ import { useGenerationStore } from "@/store/generation-store";
 import { createClient } from "@/lib/supabase/client";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import type { EditorAction } from "@/types/actions";
+import { getSpawnPosition } from "@/lib/scene-utils";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -27,18 +28,52 @@ interface GenerationJob {
 function cleanPromptForName(prompt: string): string {
   return (
     prompt
-      // Remove common generation prefixes
+      .replace(/^(please\s+)?/i, "")
       .replace(/^(generate|create|make|build|spawn|add)\s+/i, "")
-      // Remove articles
-      .replace(/^(a|an|the|me a|me an)\s+/i, "")
-      // Remove "3d model of" type phrases
+      .replace(/^(me\s+)?(a|an|the)\s+/i, "")
       .replace(/^3d\s*(model\s*)?(of\s*)?/i, "")
-      // Capitalize first letter
+      .replace(/^(new\s+)?/i, "")
+      .replace(/\b(for\s+my\s+scene|to\s+the\s+scene|in\s+the\s+scene)\s*$/i, "")
       .replace(/^./, (c) => c.toUpperCase())
-      // Truncate
       .slice(0, 40)
       .trim() || "Generated Model"
   );
+}
+
+/** Determine if a user message is a 3D generation request (vs an edit/chat command) */
+function isGenerationRequest(text: string): { isGen: boolean; prompt: string } {
+  const lower = text.toLowerCase().trim();
+
+  // Edit patterns — should go to AI chat, not 3D generation
+  const editPatterns = [
+    /^make\s+(it|the|that|this|them)\b/,
+    /^make\s+\w+\s+(more|less|bigger|smaller|taller|shorter|wider|thinner)\b/,
+    /^(change|set|update|modify|adjust|turn|paint|color|recolor)\b/,
+    /\b(pink|red|blue|green|yellow|purple|orange|white|black|gray|grey|brown|gold|silver)\s*$/,
+    /\b(visible|invisible|hidden|transparent|opaque)\s*$/,
+    /\b(roughness|metalness|metallic|opacity|color|material|texture)\b/,
+    /^(move|rotate|scale|resize|position|place|shift)\b/,
+    /^(delete|remove|hide|show|lock|unlock|rename|duplicate|copy)\b/,
+    /^(select|deselect|group|ungroup)\b/,
+  ];
+
+  if (editPatterns.some((p) => p.test(lower))) {
+    return { isGen: false, prompt: "" };
+  }
+
+  // Generation patterns
+  const genMatch = text.match(
+    /(?:^|\b)(?:generate|create|build|spawn)\s+(?:a\s+|an\s+|me\s+(?:a\s+|an\s+)?|3d\s+(?:model\s+)?(?:of\s+)?)?(.+)/i
+  );
+  if (genMatch) return { isGen: true, prompt: genMatch[1].trim() };
+
+  // "make a <noun>" or "add a <noun>" — only with articles (edit patterns already filtered)
+  const makeMatch = text.match(
+    /(?:^|\b)(?:make|add)\s+(?:a\s+|an\s+|me\s+(?:a\s+|an\s+)?)(.+)/i
+  );
+  if (makeMatch) return { isGen: true, prompt: makeMatch[1].trim() };
+
+  return { isGen: false, prompt: "" };
 }
 
 export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: string; isAuthenticated?: boolean }) {
@@ -192,7 +227,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 visible: true,
                 locked: false,
                 transform: {
-                  position: [0, 0, 0],
+                  position: getSpawnPosition(useEditorStore.getState().scene),
                   rotation: [0, 0, 0],
                   scale: [1, 1, 1],
                 },
@@ -201,6 +236,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                   generationTaskId: currentTaskId,
                   thumbnailUrl: data.thumbnailUrl,
                   modelUrl: data.modelUrl,
+                  storagePath: data.storagePath,
                   meshNames: resMeshNames,
                   meshCount: resMeshCount,
                 },
@@ -342,7 +378,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               assetId: data.asset.id,
               visible: true,
               locked: false,
-              transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+              transform: { position: getSpawnPosition(useEditorStore.getState().scene), rotation: [0, 0, 0], scale: [1, 1, 1] },
               materialOverrides: [],
               metadata: { cached: true },
             },
@@ -433,7 +469,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             assetId: data.asset.id,
             visible: true,
             locked: false,
-            transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+            transform: { position: getSpawnPosition(useEditorStore.getState().scene), rotation: [0, 0, 0], scale: [1, 1, 1] },
             materialOverrides: [],
             metadata: { cached: true },
           },
@@ -477,13 +513,11 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     setSending(true);
     setExpanded(true);
 
-    // Check if this is a generation request
-    const genMatch = trimmed.match(
-      /(?:^|\b)(?:generate|create|make|build|spawn|add)\s+(?:a\s+|an\s+|me\s+(?:a\s+|an\s+)?|3d\s+(?:model\s+)?(?:of\s+)?)?(.+)/i
-    );
+    // Check if this is a generation request (not an edit command)
+    const genResult = isGenerationRequest(trimmed);
 
-    if (genMatch) {
-      const genPrompt = genMatch[1].trim();
+    if (genResult.isGen) {
+      const genPrompt = genResult.prompt;
 
       // Show loading overlay immediately
       useGenerationStore.getState().setGenerating(genPrompt);
@@ -520,7 +554,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               visible: true,
               locked: false,
               transform: {
-                position: [0, 0, 0],
+                position: getSpawnPosition(useEditorStore.getState().scene),
                 rotation: [0, 0, 0],
                 scale: [1, 1, 1],
               },

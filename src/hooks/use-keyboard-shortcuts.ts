@@ -61,11 +61,19 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      // Delete
+      // Delete (supports multi-selection)
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedObjectId) {
+        const state = useEditorStore.getState();
+        const toDelete = state.multiSelectedIds.length > 1
+          ? [...state.multiSelectedIds]
+          : state.selectedObjectId
+            ? [state.selectedObjectId]
+            : [];
+        if (toDelete.length > 0) {
           e.preventDefault();
-          dispatch({ type: "DELETE_OBJECT", id: selectedObjectId });
+          for (const id of toDelete) {
+            dispatch({ type: "DELETE_OBJECT", id });
+          }
         }
         return;
       }

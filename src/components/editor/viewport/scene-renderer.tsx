@@ -1,11 +1,37 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import { useEditorStore } from "@/store/editor-store";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import type { SceneObject } from "@/types/scene";
+
+/** Error boundary for GLB loading failures (expired URLs, network errors) */
+class GLBErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.warn("[GLBErrorBoundary] Model load failed:", error.message, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <mesh>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#885555" wireframe />
+        </mesh>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Check if an assetId refers to a primitive shape.
@@ -87,9 +113,11 @@ function SceneObjectGroup({
       {isPrimitive(obj.assetId) ? (
         <PrimitiveObject obj={obj} isSelected={isSelected} />
       ) : (
-        <Suspense fallback={<LoadingPlaceholder />}>
-          <GLBObject obj={obj} isSelected={isSelected} />
-        </Suspense>
+        <GLBErrorBoundary>
+          <Suspense fallback={<LoadingPlaceholder />}>
+            <GLBObject obj={obj} isSelected={isSelected} />
+          </Suspense>
+        </GLBErrorBoundary>
       )}
     </group>
   );
