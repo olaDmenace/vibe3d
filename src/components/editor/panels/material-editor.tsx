@@ -124,8 +124,7 @@ function SliderRow({
           step="0.01"
           value={value}
           onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/10"
-          style={{ accentColor: "#7CC4F8" }}
+          className="flex-1"
         />
         <span className="w-[32px] shrink-0 text-right font-[family-name:var(--font-spline-sans)] text-[10px] text-white/40">
           {value.toFixed(2)}

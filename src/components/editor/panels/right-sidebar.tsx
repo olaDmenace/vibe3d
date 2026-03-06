@@ -7,7 +7,9 @@ import type { EditorAction } from "@/types/actions";
 import { SharingModal } from "@/components/editor/sharing-modal";
 import { MeshPartsPanel } from "./mesh-parts-panel";
 import { MaterialEditor } from "./material-editor";
+import { MaterialPresetsPanel } from "./material-presets-panel";
 import { LightingEditor } from "./lighting-editor";
+import { AssetLibraryPanel } from "./asset-library-panel";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -521,7 +523,7 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
             </svg>
           </button>
           {showExportMenu && (
-            <div className="absolute right-0 top-9 z-50 w-full overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#1F1F18]">
+            <div className="dropdown-menu absolute right-0 top-9 z-50 w-full font-body">
               {(["glb", "obj", "stl"] as const).map((fmt) => (
                 <button
                   key={fmt}
@@ -540,7 +542,7 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
                       setExporting(false);
                     }
                   }}
-                  className="flex w-full items-center px-3 py-2 text-left font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 transition-colors hover:bg-white/[0.06]"
+                  className="dropdown-item text-[11px]"
                 >
                   .{fmt.toUpperCase()}
                   {fmt === exportFormat && (
@@ -550,8 +552,7 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
                   )}
                 </button>
               ))}
-              {/* Divider */}
-              <div className="mx-2 border-t border-white/[0.06]" />
+              <div className="dropdown-separator" />
               {/* Export Selected */}
               <button
                 type="button"
@@ -574,7 +575,7 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
                     setExporting(false);
                   }
                 }}
-                className="flex w-full items-center px-3 py-2 text-left font-[family-name:var(--font-spline-sans)] text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="dropdown-item text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Export Selected (.GLB)
               </button>
@@ -683,6 +684,14 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
           </>
         )}
 
+        {/* ----- Material Presets section ----- */}
+        {selectedObject && (
+          <>
+            <MaterialPresetsPanel />
+            <div className="mx-3 border-t border-white/[0.06]" />
+          </>
+        )}
+
         {/* ----- Lighting Editor section ----- */}
         <LightingEditor />
         <div className="mx-3 border-t border-white/[0.06]" />
@@ -752,6 +761,16 @@ export function RightSidebar({ projectId }: { projectId?: string }) {
 
         {/* Divider */}
         <div className="mx-3 border-t border-white/[0.06]" />
+
+        {/* ----- Asset Library section ----- */}
+        {projectId && (
+          <>
+            <AssetSection label="Asset Library" defaultExpanded={false}>
+              <AssetLibraryPanel projectId={projectId} />
+            </AssetSection>
+            <div className="mx-3 border-t border-white/[0.06]" />
+          </>
+        )}
 
         {/* ----- Media Assets section ----- */}
         <AssetSection label="Media Assets">

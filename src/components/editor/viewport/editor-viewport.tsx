@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Suspense } from "react";
+import { EffectComposer, N8AO, Bloom } from "@react-three/postprocessing";
 import { SceneRenderer } from "./scene-renderer";
 import { EnvironmentSetup } from "./environment-setup";
 import { LightingRenderer } from "./lighting-renderer";
@@ -14,6 +15,9 @@ import { useEditorStore } from "@/store/editor-store";
 export function EditorViewport() {
   const camera = useEditorStore((s) => s.scene.camera);
   const dispatch = useEditorStore((s) => s.dispatch);
+  const enablePostProcessing = useEditorStore(
+    (s) => s.enablePostProcessing
+  );
 
   const handlePointerMissed = () => {
     dispatch({ type: "SELECT_OBJECT", id: null });
@@ -23,7 +27,13 @@ export function EditorViewport() {
     <div className="relative h-full w-full bg-[#262624]">
       <Canvas
         shadows
-        gl={{ preserveDrawingBuffer: true }}
+        gl={{
+          preserveDrawingBuffer: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.2,
+          outputColorSpace: THREE.SRGBColorSpace,
+          antialias: true,
+        }}
         camera={{
           position: camera.position,
           fov: camera.fov,
@@ -39,6 +49,16 @@ export function EditorViewport() {
           <TransformGizmo />
           <OrbitControls makeDefault target={camera.target} />
           <CameraManager />
+          {enablePostProcessing && (
+            <EffectComposer>
+              <N8AO intensity={2} aoRadius={0.5} distanceFalloff={0.5} />
+              <Bloom
+                luminanceThreshold={0.9}
+                luminanceSmoothing={0.025}
+                intensity={0.3}
+              />
+            </EffectComposer>
+          )}
         </Suspense>
       </Canvas>
     </div>

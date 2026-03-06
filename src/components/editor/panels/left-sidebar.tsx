@@ -683,20 +683,16 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
         <>
           <div className="fixed inset-0 z-[9999]" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-[10000] flex flex-col gap-0.5 py-1.5"
+            className="dropdown-menu fixed z-[10000] font-body"
             style={{
               left: contextMenu.x,
               top: contextMenu.y,
               width: 160,
-              background: "rgba(30, 30, 24, 0.95)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderRadius: 10,
               backdropFilter: "blur(16px)",
-              boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.4)",
             }}
           >
             <button
-              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              className="dropdown-item text-[11px]"
               onClick={() => {
                 handleRename(contextMenu.objectId);
                 setContextMenu(null);
@@ -705,7 +701,7 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
               Rename
             </button>
             <button
-              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              className="dropdown-item text-[11px]"
               onClick={() => {
                 const newId = crypto.randomUUID();
                 dispatch({ type: "DUPLICATE_OBJECT", sourceId: contextMenu.objectId, newId });
@@ -716,7 +712,7 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
               Duplicate
             </button>
             <button
-              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
+              className="dropdown-item text-[11px]"
               onClick={() => {
                 const obj = objects[contextMenu.objectId];
                 if (obj) dispatch({ type: "SET_VISIBILITY", id: contextMenu.objectId, visible: !obj.visible });
@@ -725,9 +721,9 @@ export function LeftSidebar({ projectId, projectName }: LeftSidebarProps) {
             >
               {objects[contextMenu.objectId]?.visible ? "Hide" : "Show"}
             </button>
-            <div style={{ height: 1, background: "rgba(255, 255, 255, 0.06)", margin: "2px 8px" }} />
+            <div className="dropdown-separator" />
             <button
-              className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-red-400/80 hover:bg-red-500/10 transition-colors cursor-pointer"
+              className="dropdown-item dropdown-item--danger text-[11px]"
               onClick={() => {
                 dispatch({ type: "DELETE_OBJECT", id: contextMenu.objectId });
                 setContextMenu(null);

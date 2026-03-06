@@ -181,24 +181,19 @@ export function EditorToolbar({
           {/* Primitives Dropdown */}
           {dropdownOpen && (
             <div
-              className="absolute flex flex-col gap-0.5 py-1.5"
+              className="dropdown-menu absolute font-body"
               style={{
                 top: 24,
                 left: 8,
                 width: 140,
-                background: "rgba(30, 30, 24, 0.95)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: 12,
                 backdropFilter: "blur(16px)",
-                boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.4)",
               }}
             >
               {PRIMITIVES.map(({ type, icon, label }) => (
                 <button
                   key={type}
                   onClick={() => addPrimitive(type)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 hover:bg-white/10 transition-colors cursor-pointer"
-                  style={{ letterSpacing: "0.3px" }}
+                  className="dropdown-item text-[11px]"
                 >
                   <span className="opacity-60">{icon}</span>
                   {label}
@@ -356,6 +351,29 @@ export function EditorToolbar({
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.8 }}>
             <path d="M2 8.5L8 3L14 8.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M3.5 7.5V13H6.5V10H9.5V13H12.5V7.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {/* Keyboard Shortcuts Help */}
+        <button
+          onClick={() => {
+            // Dispatch a custom event that the layout picks up
+            window.dispatchEvent(new CustomEvent("editor:show-shortcuts"));
+          }}
+          title="Keyboard shortcuts (?)"
+          className="flex items-center justify-center cursor-pointer transition-opacity hover:bg-white/10"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: "transparent",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
         </button>
 

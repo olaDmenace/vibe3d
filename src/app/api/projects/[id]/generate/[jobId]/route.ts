@@ -7,6 +7,7 @@ import {
   refineModel,
 } from "@/lib/ai/generation-service";
 import { segmentMesh } from "@/lib/three/mesh-segmenter";
+import { cleanupMesh, optimizeMesh } from "@/lib/three/mesh-cleanup";
 
 /* ------------------------------------------------------------------ */
 /*  Retry helper for transient Meshy failures                          */
@@ -113,7 +114,10 @@ export async function GET(
     } else {
       try {
         // Download the model from Meshy CDN (server-side, no CORS)
-        const { buffer } = await downloadModel(status.modelUrl);
+        const { buffer: rawBuffer } = await downloadModel(status.modelUrl);
+
+        // --- Mesh cleanup (weld, dedup, prune, doubleSided) ---
+        const buffer = await cleanupMesh(rawBuffer);
 
         // Get the prompt from the query string
         const prompt = url.searchParams.get("prompt") ?? "ai-model";
@@ -132,7 +136,7 @@ export async function GET(
         let finalBuffer: ArrayBuffer | Uint8Array = buffer;
 
         try {
-          const segResult = await segmentMesh(buffer, promptHint);
+          const segResult = await segmentMesh(buffer.buffer as ArrayBuffer, promptHint);
           finalBuffer = segResult.buffer;
           meshNames = segResult.meshNames;
           meshCount = segResult.meshCount;
@@ -148,6 +152,14 @@ export async function GET(
           finalBuffer = buffer;
           meshNames = [promptHint];
           meshCount = 1;
+        }
+
+        // Post-segmentation optimization (normals, quantize, final prune)
+        try {
+          finalBuffer = await optimizeMesh(finalBuffer);
+          console.log("[generate] Post-segmentation optimization complete");
+        } catch (optErr) {
+          console.warn("[generate] Post-segmentation optimization failed, using segmented buffer:", optErr);
         }
 
         // Upload segmented (or original) model to Supabase Storage
@@ -169,7 +181,7 @@ export async function GET(
             name: prompt.slice(0, 100),
             file_type: "model",
             file_format: "glb",
-            file_size_bytes: finalBuffer instanceof Uint8Array ? finalBuffer.byteLength : finalBuffer.byteLength,
+            file_size_bytes: finalBuffer.byteLength,
             storage_path: storagePath,
             source: "ai_generated",
             ai_prompt: normalizedPrompt,

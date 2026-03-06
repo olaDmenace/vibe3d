@@ -30,7 +30,7 @@ function LightingSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-[#7CC4F8] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+        className="flex-1"
       />
       <span className="w-[32px] shrink-0 text-right font-[family-name:var(--font-spline-sans)] text-[10px] text-white/40">
         {value.toFixed(1)}
@@ -39,9 +39,24 @@ function LightingSlider({
   );
 }
 
+const HDRI_PRESETS = [
+  { label: "Studio", value: "studio" },
+  { label: "City", value: "city" },
+  { label: "Sunset", value: "sunset" },
+  { label: "Dawn", value: "dawn" },
+  { label: "Night", value: "night" },
+  { label: "Warehouse", value: "warehouse" },
+  { label: "Forest", value: "forest" },
+  { label: "Apartment", value: "apartment" },
+  { label: "Park", value: "park" },
+  { label: "Lobby", value: "lobby" },
+] as const;
+
 export function LightingEditor() {
   const lighting = useEditorStore((s) => s.scene.lighting);
   const dispatch = useEditorStore((s) => s.dispatch);
+  const hdriPreset = useEditorStore((s) => s.hdriPreset);
+  const enablePostProcessing = useEditorStore((s) => s.enablePostProcessing);
 
   const dirLight = lighting.directionalLights[0];
 
@@ -103,6 +118,54 @@ export function LightingEditor() {
           Lighting
         </span>
       </div>
+
+      {/* Environment preset */}
+      <div className="px-3 pb-1">
+        <span className="font-[family-name:var(--font-spline-sans)] text-[10px] font-medium text-white/50">
+          Environment
+        </span>
+      </div>
+      <div className="px-3 py-[3px]">
+        <select
+          className="w-full rounded-[6px] border border-white/10 bg-white/[0.06] px-2 py-1 font-[family-name:var(--font-spline-sans)] text-[11px] text-white/80 focus:border-[#7CC4F8]/50 focus:outline-none"
+          value={hdriPreset}
+          onChange={(e) =>
+            useEditorStore.setState({ hdriPreset: e.target.value })
+          }
+        >
+          {HDRI_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* HD Rendering toggle */}
+      <div className="flex items-center gap-2 px-3 py-[3px]">
+        <span className="w-[52px] shrink-0 font-[family-name:var(--font-spline-sans)] text-[11px] text-white/60">
+          HD
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            useEditorStore.setState((s) => ({
+              enablePostProcessing: !s.enablePostProcessing,
+            }))
+          }
+          className={`flex h-5 w-9 items-center rounded-full px-0.5 transition-colors ${
+            enablePostProcessing ? "bg-[#7CC4F8]/40" : "bg-white/10"
+          }`}
+        >
+          <div
+            className={`h-4 w-4 rounded-full bg-white transition-transform ${
+              enablePostProcessing ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
+      <div className="my-1 border-t border-white/[0.06]" />
 
       {/* Ambient section */}
       <div className="px-3 pb-1">

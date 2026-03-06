@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { chat, type ChatMessage } from "@/lib/ai/chat-service";
 import type { SceneState } from "@/types/scene";
 import { validateBody, chatMessageSchema, apiError } from "@/lib/api/validation";
+
+let _anthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic {
+  if (_anthropicClient) return _anthropicClient;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("ANTHROPIC_API_KEY environment variable is not set");
+  _anthropicClient = new Anthropic({ apiKey: key });
+  return _anthropicClient;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Simple in-memory rate limiter (per-user, 30 messages/minute)       */
@@ -74,7 +84,59 @@ export async function POST(
 
   const validated = await validateBody(request, chatMessageSchema);
   if ("error" in validated) return validated.error;
-  const { message, sceneState: clientSceneState } = validated.data;
+  const { message, sceneState: clientSceneState, mode } = validated.data;
+
+  // ---- Scene decomposition mode ----
+  if (mode === "scene_decompose") {
+    try {
+      const anthropic = getAnthropicClient();
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: `You are a 3D scene planner. Given a user's scene description, decompose it into individual 3D objects that should be generated separately.
+
+Return a JSON object with this exact structure:
+{
+  "objects": [
+    {
+      "name": "Display Name",
+      "prompt": "Detailed generation prompt for this single object",
+      "position": [x, y, z],
+      "scale": [sx, sy, sz]
+    }
+  ]
+}
+
+Rules:
+- Each object should be a single, distinct item (not a scene)
+- Positions should be spatially reasonable (Y=0 is ground, objects don't overlap)
+- Scale should be relative (1,1,1 is default, adjust for relative size)
+- Maximum 6 objects per scene (to stay within generation limits)
+- The generation prompt should describe ONE object in detail for a text-to-3D model generator
+- Include structural/material details in each prompt
+- Place objects logically (lamp on or near desk, chair in front of desk, etc.)
+- Use a coordinate system where: X = left/right, Y = up, Z = forward/back
+
+Return ONLY the JSON object, no markdown or explanation.`,
+        messages: [{ role: "user", content: message }],
+      });
+
+      const text = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { type: "text"; text: string }).text)
+        .join("");
+
+      const parsed = JSON.parse(text.replace(/```json\n?|```/g, "").trim());
+      return NextResponse.json({ sceneObjects: parsed });
+    } catch (err) {
+      console.error("[chat-route] Scene decomposition failed:", err);
+      return NextResponse.json({
+        sceneObjects: {
+          objects: [{ name: "Scene", prompt: message, position: [0, 0, 0], scale: [1, 1, 1] }],
+        },
+      });
+    }
+  }
 
   // Use client-provided scene state if available, otherwise fetch from DB
   let sceneState: SceneState;

@@ -278,6 +278,60 @@ Phase 6 — Final Features Before Launch
 - Uploaded GLB files also run through the segmentation pipeline automatically.
 - Segmentation gracefully falls back to the original model on error — models always load even if segmentation fails.
 
+### Day 3 — Image-to-3D + Styles — 2026-03-06
+- [x] Drag-and-drop image support on chat panel (ring highlight on drag over)
+- [x] Improved image preview card with dismiss button before generation
+- [x] Generation style selector (Realistic, Cartoon, Low Poly, Sculpture, PBR) — pills in bottom bar
+- [x] Style passed to generate API for Meshy art_style parameter
+- [x] Generation result cards with thumbnail preview in chat messages
+- [x] Prompt suggestion chips for empty chat state ("Create a sports car", etc.)
+- [x] ChatMessage type extended with optional metadata for rich message rendering
+
+### UI Polish Pass — 2026-03-06
+- [x] Removed hardcoded Tailwind neutral classes from mesh-parts-panel
+- [x] Added `.font-body` utility class for Aeonik Pro
+- [x] Context menus & dropdowns: shared .dropdown-menu/.dropdown-item classes (viewport, hierarchy, toolbar, export)
+- [x] Range sliders: custom thumb/track styling via globals.css (material + lighting editors cleaned up)
+- [x] Selection wireframe: warm gold #d4a853 for mesh highlight (was harsh amber #f59e0b)
+- [x] Generation overlay: indigo spinner, backdrop blur, progress bar polish
+- [x] Empty state: indigo "Add Cube" button, font-body applied
+
+### Rendering Quality Upgrade — 2026-03-06
+- [x] HDRI environment lighting with preset selector (studio, city, sunset, etc.)
+- [x] Contact shadows for grounded object appearance
+- [x] ACES Filmic tone mapping + sRGB color space + antialiasing
+- [x] SSAO ambient occlusion + bloom (with HD Rendering toggle)
+- [x] Default lighting rebalanced for HDRI (lower ambient/directional intensity)
+- [x] Background color setup via R3F declarative `<color>` element
+
+### Day 4 — AI Scene Builder — 2026-03-06
+- [x] Scene request detection (desk setup, living room, etc.)
+- [x] Claude-powered scene decomposition (prompt → object list with positions)
+- [x] Sequential multi-object generation with per-object progress
+- [x] Scene generation overlay showing per-object status
+- [x] 5 preset scene templates (Desk Setup, Living Room, Product Studio, Game Scene, Outdoor Café)
+- [x] Template selector in empty chat state
+- [x] Promise-based pollGenerationForScene with custom position/scale per object
+
+### Day 5 — Material Presets + Asset Library — 2026-03-06
+- [x] 22 material presets across 5 categories (Metal, Natural, Synthetic, Fabric, Special)
+- [x] Material presets panel with category tabs and visual gradient swatches
+- [x] One-click preset application to selected object or highlighted mesh part
+- [x] Asset library panel showing all project assets with thumbnails
+- [x] Click-to-add-to-scene from asset library (reuse previous generations)
+- [x] Fixed generation_count/generation_reset_at column name mismatch (was generations_used/billing_cycle_start)
+
+### Day 6 — Final Polish + Onboarding — 2026-03-06
+- [x] Keyboard shortcuts modal with `?` key trigger and toolbar help button
+- [x] Shortcut data: 4 groups (General, Tools, Camera, Selection) with key combos
+- [x] First-time onboarding hints (3-step walkthrough with skip/next)
+- [x] AI typing indicator (bouncing dots) in chat when waiting for response
+- [x] Escape key: clears mesh highlight first, then object selection (layered deselect)
+- [x] Micro-animations: `animate-in` (fade + slide-in-from-bottom), CSS keyframes in globals.css
+- [x] Generation overlay: progress-based messages ("Creating geometry...", "Applying textures...", etc.)
+- [x] Consistency check: no hardcoded neutral colors, no debug logs, no unresolved TODOs in editor components
+- [x] All toolbar buttons have descriptive `title` attributes with shortcut labels
+
 ## Known Issues
 - THREE.js warnings in console: "THREE.Clock: This module has been deprecated" and "PCFSoftShadowMap has been removed" — cosmetic, from drei/three version mismatch.
 - Pre-existing lint errors in `transform-gizmo.tsx` — refs accessed during render (React 19 strict mode warning).

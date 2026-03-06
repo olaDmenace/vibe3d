@@ -100,7 +100,7 @@ export function MeshPartsPanel({ object }: MeshPartsPanelProps) {
               {/* Color swatch / picker */}
               <label className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <div
-                  className="w-6 h-6 rounded border-2 border-neutral-500 cursor-pointer hover:border-indigo-400 transition-colors"
+                  className="w-6 h-6 rounded border-2 border-white/30 cursor-pointer hover:border-[#7CC4F8]/60 transition-colors"
                   style={{ backgroundColor: color || "#888888" }}
                 />
                 <input
@@ -119,7 +119,7 @@ export function MeshPartsPanel({ object }: MeshPartsPanelProps) {
               {/* Clear button (only shown if color override exists) */}
               {color && (
                 <button
-                  className="text-neutral-500 hover:text-neutral-300 text-[10px] flex-shrink-0"
+                  className="text-white/35 hover:text-white/60 text-[10px] flex-shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     clearPartColor(name);

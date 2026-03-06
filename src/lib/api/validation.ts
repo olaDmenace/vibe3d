@@ -88,6 +88,7 @@ export const updateUserSchema = z.object({
 export const chatMessageSchema = z.object({
   message: z.string().min(1).max(10000),
   sceneState: z.record(z.string(), z.unknown()).optional(),
+  mode: z.enum(["chat", "scene_decompose"]).optional(),
 });
 
 /* ------------------------------------------------------------------ */

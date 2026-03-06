@@ -35,18 +35,11 @@ export function ViewportContextMenu() {
 
   return (
     <div
-      className="fixed z-[60]"
+      className="dropdown-menu fixed z-[60] font-body"
       style={{
         left: menu.x,
         top: menu.y,
-        background: "#1F1F18",
-        border: "1px solid rgba(222, 220, 209, 0.15)",
-        borderRadius: 12,
         backdropFilter: "blur(16px)",
-        boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.4)",
-        minWidth: 160,
-        padding: "4px 0",
-        fontFamily: "'Aeonik Pro', sans-serif",
       }}
     >
       {selectedObject && selectedObjectId ? (
@@ -75,7 +68,7 @@ export function ViewportContextMenu() {
               setMenu(null);
             }}
           />
-          <div style={{ height: 1, background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+          <div className="dropdown-separator" />
           <ContextButton
             label="Delete"
             shortcut="Del"
@@ -108,16 +101,12 @@ function ContextButton({
 }) {
   return (
     <button
-      className="flex w-full items-center justify-between px-3 py-1.5 transition-colors hover:bg-white/[0.06]"
-      style={{
-        fontSize: 11,
-        color: danger ? "#f87171" : "rgba(255, 255, 255, 0.7)",
-      }}
+      className={`dropdown-item text-[11px] ${danger ? "dropdown-item--danger" : ""}`}
       onClick={onClick}
     >
       <span>{label}</span>
       {shortcut && (
-        <span style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.25)", marginLeft: 12 }}>
+        <span className="ml-auto text-[10px] text-white/25">
           {shortcut}
         </span>
       )}

@@ -14,6 +14,9 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useAuthStatus } from "@/hooks/use-auth-status";
 import { useGenerationStore } from "@/store/generation-store";
 import { EditorTour } from "./tour/editor-tour";
+import { ShortcutsModal } from "./shortcuts-modal";
+import { OnboardingHints } from "./onboarding-hints";
+import { useState, useEffect } from "react";
 
 type EditorLayoutProps = {
   projectId?: string;
@@ -21,7 +24,15 @@ type EditorLayoutProps = {
 };
 
 export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {}) {
-  useKeyboardShortcuts();
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  useKeyboardShortcuts({ onShowShortcuts: () => setShowShortcuts(true) });
+  // Listen for toolbar help button click
+  useEffect(() => {
+    const handler = () => setShowShortcuts(true);
+    window.addEventListener("editor:show-shortcuts", handler);
+    return () => window.removeEventListener("editor:show-shortcuts", handler);
+  }, []);
+
   const { isAuthenticated } = useAuthStatus();
   const { isGenerating, prompt, progress, startedAt } = useGenerationStore();
 
@@ -75,6 +86,12 @@ export function EditorLayout({ projectId, projectName }: EditorLayoutProps = {})
 
       {/* Guided tour overlay */}
       <EditorTour />
+
+      {/* Keyboard shortcuts modal */}
+      <ShortcutsModal open={showShortcuts} onClose={() => setShowShortcuts(false)} />
+
+      {/* First-time onboarding hints */}
+      <OnboardingHints />
     </div>
   );
 }

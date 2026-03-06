@@ -417,10 +417,10 @@ function MeshHighlight({
     <mesh position={[center.x, center.y, center.z]}>
       <boxGeometry args={[size.x * 1.05, size.y * 1.05, size.z * 1.05]} />
       <meshBasicMaterial
-        color="#f59e0b"
+        color="#d4a853"
         wireframe
         transparent
-        opacity={0.5}
+        opacity={0.4}
       />
     </mesh>
   );

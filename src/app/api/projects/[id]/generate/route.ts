@@ -75,8 +75,8 @@ export async function POST(
     .single();
 
   const plan = ((profile as Record<string, unknown>)?.plan as PlanTier) ?? "free";
-  const generationsUsed = ((profile as Record<string, unknown>)?.generations_used as number) ?? 0;
-  const billingCycleStart = ((profile as Record<string, unknown>)?.billing_cycle_start as string) ?? null;
+  const generationsUsed = ((profile as Record<string, unknown>)?.generation_count as number) ?? 0;
+  const billingCycleStart = ((profile as Record<string, unknown>)?.generation_reset_at as string) ?? null;
   const planConfig = PLAN_CONFIGS[plan];
 
   // Check if billing cycle needs reset (monthly)
@@ -91,8 +91,8 @@ export async function POST(
       await supabase
         .from("profiles")
         .update({
-          generations_used: 0,
-          billing_cycle_start: now.toISOString(),
+          generation_count: 0,
+          generation_reset_at: now.toISOString(),
         } as Record<string, unknown>)
         .eq("id", user.id);
     }
@@ -148,7 +148,7 @@ export async function POST(
     await supabase
       .from("profiles")
       .update({
-        generations_used: generationsUsed + 1,
+        generation_count: generationsUsed + 1,
       } as Record<string, unknown>)
       .eq("id", user.id);
 

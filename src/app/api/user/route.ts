@@ -43,7 +43,7 @@ export async function GET() {
     },
     plan: (profileAny?.plan as string) ?? "free",
     generation_limit: (profileAny?.generation_limit as number) ?? 5,
-    generations_used: (profileAny?.generations_used as number) ?? 0,
+    generations_used: (profileAny?.generation_count as number) ?? 0,
   });
 }
 

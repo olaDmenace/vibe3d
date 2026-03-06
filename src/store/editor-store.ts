@@ -12,13 +12,13 @@ export const DEFAULT_SCENE_STATE: SceneState = {
   version: 1,
   objects: {},
   lighting: {
-    ambientLight: { color: "#ffffff", intensity: 0.5 },
+    ambientLight: { color: "#ffffff", intensity: 0.3 },
     directionalLights: [
       {
         id: "default-dir-light",
         color: "#ffffff",
-        intensity: 1,
-        position: [5, 10, 5],
+        intensity: 0.8,
+        position: [5, 10, 7],
         castShadow: true,
       },
     ],
@@ -74,6 +74,10 @@ type EditorStore = {
   sidebarTab: SidebarTab;
   highlightedMeshName: string | null;
   snapToGrid: boolean;
+
+  // Rendering
+  hdriPreset: string;
+  enablePostProcessing: boolean;
 
   // Actions
   dispatch: (action: EditorAction) => void;
@@ -378,6 +382,9 @@ export const useEditorStore = create<EditorStore>()(
     sidebarTab: "hierarchy",
     highlightedMeshName: null,
     snapToGrid: true,
+
+    hdriPreset: "studio",
+    enablePostProcessing: true,
 
     dispatch: (action: EditorAction) => {
       if (!TRANSIENT_ACTIONS.includes(action.type)) {

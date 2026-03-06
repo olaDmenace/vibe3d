@@ -14,7 +14,11 @@ import { useEffect } from "react";
  * R: Rotate tool
  * S: Scale tool
  */
-export function useKeyboardShortcuts() {
+interface ShortcutOptions {
+  onShowShortcuts?: () => void;
+}
+
+export function useKeyboardShortcuts(options?: ShortcutOptions) {
   const dispatch = useEditorStore((s) => s.dispatch);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
@@ -105,6 +109,24 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      // Shortcuts help
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        options?.onShowShortcuts?.();
+        return;
+      }
+
+      // Escape: clear mesh highlight first, then object selection
+      if (e.key === "Escape") {
+        const { highlightedMeshName } = useEditorStore.getState();
+        if (highlightedMeshName) {
+          useEditorStore.setState({ highlightedMeshName: null });
+        } else if (selectedObjectId) {
+          dispatch({ type: "SELECT_OBJECT", id: null });
+        }
+        return;
+      }
+
       // Tool shortcuts
       if (!ctrl) {
         switch (e.key.toLowerCase()) {
@@ -126,5 +148,5 @@ export function useKeyboardShortcuts() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dispatch, undo, redo, selectedObjectId, setActiveTool]);
+  }, [dispatch, undo, redo, selectedObjectId, setActiveTool, options]);
 }

@@ -14,7 +14,58 @@ interface ChatMessage {
   content: string;
   actions?: EditorAction[];
   timestamp: string;
+  metadata?: Record<string, unknown>;
 }
+
+const GENERATION_STYLES = [
+  { id: "realistic", label: "Realistic", icon: "\uD83C\uDFAF" },
+  { id: "cartoon", label: "Cartoon", icon: "\uD83C\uDFA8" },
+  { id: "low-poly", label: "Low Poly", icon: "\uD83D\uDC8E" },
+  { id: "sculpture", label: "Sculpture", icon: "\uD83D\uDDFF" },
+  { id: "pbr", label: "PBR", icon: "\u2728" },
+] as const;
+
+const SUGGESTIONS = [
+  "Create a sports car",
+  "Create a medieval castle",
+  "Create a cute robot",
+  "Create a modern chair",
+  "Create a treasure chest",
+  "Create a space helmet",
+];
+
+const SCENE_TEMPLATES = [
+  {
+    id: "desk-setup",
+    label: "Desk Setup",
+    icon: "\uD83D\uDDA5\uFE0F",
+    prompt: "Create a modern desk setup with a desk, monitor, keyboard, desk lamp, and coffee mug",
+  },
+  {
+    id: "living-room",
+    label: "Living Room",
+    icon: "\uD83D\uDECB\uFE0F",
+    prompt: "Create a cozy living room with a sofa, coffee table, floor lamp, and bookshelf",
+  },
+  {
+    id: "product-studio",
+    label: "Product Studio",
+    icon: "\uD83D\uDCF8",
+    prompt: "Create a product photography studio with a white display table and two studio lights",
+  },
+  {
+    id: "game-scene",
+    label: "Game Scene",
+    icon: "\uD83C\uDFAE",
+    prompt: "Create a game scene with a treasure chest, wooden barrel, torch on a wall mount, and stone pedestal",
+  },
+  {
+    id: "outdoor-cafe",
+    label: "Outdoor Caf\u00E9",
+    icon: "\u2615",
+    prompt: "Create an outdoor caf\u00E9 scene with a small round table, two chairs, a potted plant, and a coffee cup",
+  },
+];
 
 interface GenerationJob {
   taskId: string;
@@ -76,14 +127,77 @@ function isGenerationRequest(text: string): { isGen: boolean; prompt: string } {
   return { isGen: false, prompt: "" };
 }
 
+/** Detect if a message describes a multi-object scene */
+function isSceneRequest(message: string): boolean {
+  const scenePatterns = [
+    /(?:scene|setup|environment|room|desk|table|kitchen|office|bedroom|living room|workspace|studio)/i,
+    /(?:with|including|containing|featuring)\s+(?:a|an|some|the)\s+\w+\s+(?:and|,)\s+/i,
+    /(?:create|build|make|generate)\s+(?:a|an|my)\s+\w+\s+(?:scene|setup|room|space)/i,
+  ];
+  return scenePatterns.some((p) => p.test(message));
+}
+
+function GenerationResultCard({ message }: { message: ChatMessage }) {
+  const thumbnailUrl = message.metadata?.thumbnailUrl as string | undefined;
+  const meshCount = message.metadata?.meshCount as number | undefined;
+  const objectName = message.metadata?.objectName as string | undefined;
+
+  return (
+    <div
+      className="flex flex-col"
+      style={{ alignSelf: "flex-start", maxWidth: "85%" }}
+    >
+      <div
+        style={{
+          borderRadius: "12px 12px 12px 4px",
+          background: "rgba(62, 62, 62, 0.5)",
+          overflow: "hidden",
+          fontFamily: "'Spline Sans', sans-serif",
+        }}
+      >
+        {thumbnailUrl && (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={thumbnailUrl}
+              alt={objectName || "Generated model"}
+              className="w-full h-32 object-cover"
+            />
+            <div
+              className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] text-white"
+              style={{ background: "rgba(0, 0, 0, 0.6)" }}
+            >
+              3D Model
+            </div>
+          </div>
+        )}
+        <div className="px-3 py-2">
+          <p className="text-[12px] font-medium text-white/90">
+            {objectName || "Generated Model"}
+          </p>
+          {meshCount !== undefined && meshCount > 1 && (
+            <p className="text-[10px] text-white/40 mt-0.5">
+              {meshCount} editable parts
+            </p>
+          )}
+          <p className="text-[10px] text-white/40 mt-1">Added to scene</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: string; isAuthenticated?: boolean }) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [isAITyping, setIsAITyping] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [generationJob, setGenerationJob] = useState<GenerationJob | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<string>("realistic");
+  const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -259,6 +373,12 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                 role: "assistant",
                 content: `3D model "${cleanPromptForName(prompt)}" has been generated and added to your scene.${meshInfo}`,
                 timestamp: new Date().toISOString(),
+                metadata: {
+                  type: "generation_complete",
+                  thumbnailUrl: data.thumbnailUrl,
+                  meshCount: resMeshCount,
+                  objectName: cleanPromptForName(prompt),
+                },
               },
             ]);
 
@@ -353,7 +473,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const res = await fetch(`/api/projects/${projectId}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: pendingPrompt }),
+          body: JSON.stringify({ prompt: pendingPrompt, style: selectedStyle }),
         });
         const data = await res.json();
 
@@ -499,6 +619,207 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     }
   }, [projectId, dispatch, pollGeneration, supabase.storage]);
 
+  // --- Scene Builder ---
+
+  const decomposeScene = useCallback(async (prompt: string) => {
+    const res = await fetch(`/api/projects/${projectId}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt, mode: "scene_decompose" }),
+    });
+    const data = await res.json();
+    return data.sceneObjects as {
+      objects: Array<{
+        name: string;
+        prompt: string;
+        position: [number, number, number];
+        scale: [number, number, number];
+      }>;
+    };
+  }, [projectId]);
+
+  const pollGenerationForScene = useCallback((
+    taskId: string,
+    prompt: string,
+    name: string,
+    position: [number, number, number],
+    scale: [number, number, number]
+  ): Promise<void> => {
+    return new Promise((resolve) => {
+      let delay = 3000;
+      let attempts = 0;
+      const maxAttempts = 60;
+      let isRefining = false;
+      let currentTaskId = taskId;
+
+      async function poll() {
+        if (attempts >= maxAttempts) { resolve(); return; }
+        attempts++;
+
+        try {
+          const refineParam = isRefining ? "&refine=true" : "";
+          const res = await fetch(
+            `/api/projects/${projectId}/generate/${currentTaskId}?prompt=${encodeURIComponent(prompt)}${refineParam}`
+          );
+          const data = await res.json();
+
+          if (data.status === "refining" && data.refineTaskId) {
+            currentTaskId = data.refineTaskId;
+            isRefining = true;
+            delay = 3000;
+            useGenerationStore.getState().setProgress(50);
+            setTimeout(poll, delay);
+            return;
+          }
+
+          if (data.status === "complete" && data.modelUrl) {
+            const objId = crypto.randomUUID();
+            dispatch({
+              type: "ADD_OBJECT",
+              id: objId,
+              payload: {
+                name,
+                parentId: null,
+                assetId: `generated:${currentTaskId}`,
+                visible: true,
+                locked: false,
+                transform: { position, rotation: [0, 0, 0], scale },
+                materialOverrides: [],
+                metadata: {
+                  modelUrl: data.modelUrl,
+                  thumbnailUrl: data.thumbnailUrl,
+                  meshNames: data.meshNames,
+                  meshCount: data.meshCount,
+                  generationTaskId: currentTaskId,
+                },
+              },
+            });
+            resolve();
+            return;
+          }
+
+          if (data.status === "failed") { resolve(); return; }
+
+          const displayProgress = isRefining
+            ? 50 + Math.floor((data.progress ?? 0) / 2)
+            : Math.floor((data.progress ?? 0) / 2);
+          useGenerationStore.getState().setProgress(displayProgress);
+
+          delay = Math.min(delay * 1.3, 15000);
+          setTimeout(poll, delay);
+        } catch {
+          delay = Math.min(delay * 1.5, 15000);
+          setTimeout(poll, delay);
+        }
+      }
+
+      setTimeout(poll, delay);
+    });
+  }, [projectId, dispatch]);
+
+  const handleSceneGeneration = useCallback(async (prompt: string) => {
+    if (!projectId) return;
+    setExpanded(true);
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: prompt, timestamp: new Date().toISOString() },
+      { role: "assistant", content: `Planning your scene: "${prompt}"...`, timestamp: new Date().toISOString() },
+    ]);
+
+    try {
+      const decomposition = await decomposeScene(prompt);
+      const objects = decomposition.objects;
+
+      // Initialize scene objects in the generation store
+      useGenerationStore.getState().setGenerating(prompt);
+      useGenerationStore.getState().setSceneObjects(
+        objects.map((o) => ({ name: o.name, status: "pending" as const }))
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Scene planned with ${objects.length} objects: ${objects.map((o) => o.name).join(", ")}. Generating each...`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+
+      for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i];
+        useGenerationStore.getState().updateSceneObjectStatus(i, "generating");
+        useGenerationStore.getState().setProgress(0);
+
+        try {
+          const res = await fetch(`/api/projects/${projectId}/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: obj.prompt, style: selectedStyle }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || data.error) {
+            useGenerationStore.getState().updateSceneObjectStatus(i, "failed");
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Failed to generate ${obj.name}: ${data.error || "Unknown error"}. Continuing...`,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+            continue;
+          }
+
+          if (data.cached) {
+            const objId = crypto.randomUUID();
+            dispatch({
+              type: "ADD_OBJECT",
+              id: objId,
+              payload: {
+                name: obj.name,
+                parentId: null,
+                assetId: data.asset.id,
+                visible: true,
+                locked: false,
+                transform: { position: obj.position, rotation: [0, 0, 0], scale: obj.scale },
+                materialOverrides: [],
+                metadata: { cached: true },
+              },
+            });
+            useGenerationStore.getState().updateSceneObjectStatus(i, "complete");
+            continue;
+          }
+
+          await pollGenerationForScene(data.taskId, obj.prompt, obj.name, obj.position, obj.scale);
+          useGenerationStore.getState().updateSceneObjectStatus(i, "complete");
+        } catch (err) {
+          console.error(`Failed to generate ${obj.name}:`, err);
+          useGenerationStore.getState().updateSceneObjectStatus(i, "failed");
+        }
+      }
+
+      useGenerationStore.getState().clearGeneration();
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Scene complete! Generated ${objects.length} objects. You can select and edit each one individually.`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      console.error("Scene generation failed:", err);
+      useGenerationStore.getState().clearGeneration();
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Failed to plan the scene. Please try again.", timestamp: new Date().toISOString() },
+      ]);
+    }
+  }, [projectId, decomposeScene, pollGenerationForScene, dispatch, selectedStyle]);
+
   const handleSend = async () => {
     const trimmed = message.trim();
     if (!trimmed || sending || !projectId) return;
@@ -513,8 +834,15 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     setSending(true);
     setExpanded(true);
 
-    // Check if this is a generation request (not an edit command)
+    // Check if this is a scene request (multiple objects) first
     const genResult = isGenerationRequest(trimmed);
+    if (isSceneRequest(trimmed) && genResult.isGen) {
+      // Remove the user message we just added — handleSceneGeneration adds its own
+      setMessages((prev) => prev.slice(0, -1));
+      setSending(false);
+      await handleSceneGeneration(trimmed);
+      return;
+    }
 
     if (genResult.isGen) {
       const genPrompt = genResult.prompt;
@@ -526,7 +854,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const res = await fetch(`/api/projects/${projectId}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: genPrompt }),
+          body: JSON.stringify({ prompt: genPrompt, style: selectedStyle }),
         });
         const data = await res.json();
 
@@ -600,6 +928,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     }
 
     // Regular chat message — send to AI
+    setIsAITyping(true);
     try {
       const currentScene = useEditorStore.getState().getSerializableState();
       const res = await fetch(`/api/projects/${projectId}/chat`, {
@@ -638,6 +967,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         { role: "assistant", content: "Failed to send message. Please try again.", timestamp: new Date().toISOString() },
       ]);
     }
+    setIsAITyping(false);
     setSending(false);
   };
 
@@ -650,13 +980,124 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
 
   return (
     <div
-      className="absolute z-20"
+      className={`absolute z-20 ${isDragOver ? "ring-2 ring-indigo-500/50 ring-inset rounded-[20px]" : ""}`}
       style={{
         width: 626,
         left: "calc(50% - 313px)",
         bottom: 16,
       }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith("image/")) {
+          handleImageUpload(file);
+        }
+      }}
     >
+      {isDragOver && (
+        <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center z-10 pointer-events-none rounded-[20px]">
+          <div className="text-sm text-indigo-400 font-medium font-body">
+            Drop image to generate 3D model
+          </div>
+        </div>
+      )}
+
+      {/* Suggestion chips when chat is empty */}
+      {messages.length === 0 && !expanded && (
+        <div
+          style={{
+            marginBottom: 8,
+            padding: "12px 16px",
+            background: "#1F1F18",
+            border: "1px solid rgba(222, 220, 209, 0.15)",
+            borderRadius: 14,
+            backdropFilter: "blur(16px)",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "'Spline Sans', sans-serif",
+              fontSize: 11,
+              color: "rgba(255, 255, 255, 0.35)",
+              marginBottom: 8,
+            }}
+          >
+            Try one of these:
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                className="px-3 py-1.5 rounded-full text-[11px] transition-colors"
+                style={{
+                  border: "1px solid rgba(222, 220, 209, 0.15)",
+                  color: "rgba(255, 255, 255, 0.52)",
+                  background: "transparent",
+                  fontFamily: "'Spline Sans', sans-serif",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+                  e.currentTarget.style.color = "rgba(255, 255, 255, 0.7)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "rgba(255, 255, 255, 0.52)";
+                }}
+                onClick={() => setMessage(s)}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {/* Scene templates */}
+          <div style={{ marginTop: 10 }}>
+            <p
+              style={{
+                fontFamily: "'Spline Sans', sans-serif",
+                fontSize: 11,
+                color: "rgba(255, 255, 255, 0.35)",
+                marginBottom: 6,
+              }}
+            >
+              Or generate a full scene:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {SCENE_TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] transition-colors"
+                  style={{
+                    border: "1px solid rgba(222, 220, 209, 0.15)",
+                    color: "rgba(255, 255, 255, 0.52)",
+                    background: "transparent",
+                    fontFamily: "'Spline Sans', sans-serif",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(99, 102, 241, 0.1)";
+                    e.currentTarget.style.color = "rgba(165, 180, 252, 0.9)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "rgba(255, 255, 255, 0.52)";
+                  }}
+                  onClick={() => handleSceneGeneration(t.prompt)}
+                >
+                  <span>{t.icon}</span>
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Expanded messages area */}
       {expanded && messages.length > 0 && (
         <div
@@ -694,42 +1135,63 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             className="flex flex-col gap-2 overflow-y-auto px-4 pb-3"
             style={{ maxHeight: 260 }}
           >
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className="flex flex-col"
-                style={{
-                  alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "85%",
-                }}
-              >
+            {messages.map((msg, i) =>
+              msg.metadata?.type === "generation_complete" ? (
+                <GenerationResultCard key={i} message={msg} />
+              ) : (
                 <div
+                  key={i}
+                  className="flex flex-col"
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: msg.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-                    background: msg.role === "user" ? "rgba(124, 196, 248, 0.15)" : "rgba(62, 62, 62, 0.5)",
-                    fontSize: 12,
-                    lineHeight: "18px",
-                    color: "rgba(255, 255, 255, 0.85)",
-                    fontFamily: "'Spline Sans', sans-serif",
+                    alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                    maxWidth: "85%",
                   }}
                 >
-                  {msg.content}
-                </div>
-                {msg.actions && msg.actions.length > 0 && (
-                  <span
+                  <div
                     style={{
-                      fontSize: 10,
-                      color: "rgba(124, 196, 248, 0.6)",
-                      marginTop: 2,
+                      padding: "8px 12px",
+                      borderRadius: msg.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
+                      background: msg.role === "user" ? "rgba(124, 196, 248, 0.15)" : "rgba(62, 62, 62, 0.5)",
+                      fontSize: 12,
+                      lineHeight: "18px",
+                      color: "rgba(255, 255, 255, 0.85)",
                       fontFamily: "'Spline Sans', sans-serif",
                     }}
                   >
-                    {msg.actions.length} action{msg.actions.length > 1 ? "s" : ""} applied
-                  </span>
-                )}
+                    {msg.content}
+                  </div>
+                  {msg.actions && msg.actions.length > 0 && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "rgba(124, 196, 248, 0.6)",
+                        marginTop: 2,
+                        fontFamily: "'Spline Sans', sans-serif",
+                      }}
+                    >
+                      {msg.actions.length} action{msg.actions.length > 1 ? "s" : ""} applied
+                    </span>
+                  )}
+                </div>
+              )
+            )}
+            {isAITyping && (
+              <div className="flex justify-start">
+                <div
+                  className="px-4 py-3"
+                  style={{
+                    borderRadius: "12px 12px 12px 4px",
+                    background: "rgba(62, 62, 62, 0.5)",
+                  }}
+                >
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
               </div>
-            ))}
+            )}
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -932,7 +1394,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         </div>
 
         {/* Image upload preview — below the input area */}
-        {(uploadingImage || imagePreview) && (
+        {imagePreview && (
           <div
             className="flex items-center gap-2 px-4"
             style={{
@@ -940,20 +1402,28 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
               left: 0,
               right: 0,
               bottom: 33,
-              height: 28,
+              height: 36,
             }}
           >
-            {imagePreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imagePreview} alt="Upload" className="h-6 w-6 rounded object-cover" />
-            )}
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagePreview} alt="Upload preview" className="h-8 w-8 rounded-md object-cover border border-white/10" />
+              {!uploadingImage && (
+                <button
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#1F1F18] border border-white/15 text-white/50 hover:text-white flex items-center justify-center text-[8px]"
+                  onClick={() => setImagePreview(null)}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'Spline Sans', sans-serif" }}>
-              {uploadingImage ? "Uploading & generating..." : "Processing image..."}
+              {uploadingImage ? "Uploading & generating..." : "Ready to generate"}
             </span>
           </div>
         )}
 
-        {/* Model selector row (below the inner container) */}
+        {/* Style selector + model row (below the inner container) */}
         <div
           className="flex items-center gap-1.5 px-4"
           style={{
@@ -984,6 +1454,26 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           >
             Vibe3D AI
           </span>
+
+          {/* Style pills */}
+          <div className="flex items-center gap-1 ml-2 overflow-x-auto">
+            {GENERATION_STYLES.map((style) => (
+              <button
+                key={style.id}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] transition-colors flex-shrink-0"
+                style={{
+                  background: selectedStyle === style.id ? "rgba(99, 102, 241, 0.2)" : "transparent",
+                  color: selectedStyle === style.id ? "rgba(165, 180, 252, 0.9)" : "rgba(255, 255, 255, 0.35)",
+                  border: selectedStyle === style.id ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid transparent",
+                  fontFamily: "'Spline Sans', sans-serif",
+                }}
+                onClick={() => setSelectedStyle(style.id)}
+              >
+                <span>{style.icon}</span>
+                <span>{style.label}</span>
+              </button>
+            ))}
+          </div>
 
           {messages.length > 0 && (
             <button
