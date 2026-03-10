@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Trash2, RotateCcw } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface TrashedProject {
   id: string;
@@ -19,6 +20,7 @@ interface TrashSectionProps {
 export function TrashSection({ open, onClose }: TrashSectionProps) {
   const [projects, setProjects] = useState<TrashedProject[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const loadTrashed = useCallback(async () => {
     setLoading(true);
@@ -44,8 +46,14 @@ export function TrashSection({ open, onClose }: TrashSectionProps) {
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const handlePermanentDelete = async (id: string) => {
-    if (!confirm("Permanently delete this project? This cannot be undone.")) return;
+  const handlePermanentDelete = (id: string) => {
+    setDeleteConfirm(id);
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!deleteConfirm) return;
+    const id = deleteConfirm;
+    setDeleteConfirm(null);
     await fetch(`/api/projects/${id}/permanent`, { method: "DELETE" });
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
@@ -163,6 +171,16 @@ export function TrashSection({ open, onClose }: TrashSectionProps) {
             </div>
           )}
         </div>
+
+        <ConfirmDialog
+          open={deleteConfirm !== null}
+          title="Permanently Delete"
+          message="Permanently delete this project? This cannot be undone."
+          confirmLabel="Delete Forever"
+          variant="danger"
+          onConfirm={confirmPermanentDelete}
+          onCancel={() => setDeleteConfirm(null)}
+        />
       </div>
     </div>
   );

@@ -5,9 +5,11 @@ import {
   generateFromImage,
   normalizePrompt,
   expandPromptForGeneration,
+  resolveProvider,
 } from "@/lib/ai/generation-service";
 import { PLAN_CONFIGS, type PlanTier } from "@/lib/ai/types";
 import { validateBody, generateSchema, apiError } from "@/lib/api/validation";
+import { enrichPrompt } from "@/lib/ai/prompt-enricher";
 
 /* ------------------------------------------------------------------ */
 /*  Retry helper for transient Meshy failures                          */
@@ -65,7 +67,7 @@ export async function POST(
 
   const validated = await validateBody(request, generateSchema);
   if ("error" in validated) return validated.error;
-  const { prompt, style, imageUrl } = validated.data;
+  const { prompt, style, imageUrl, provider: providerHint, enhance } = validated.data;
 
   // ---- Rate limit check ----
   const { data: profile } = await supabase
@@ -75,8 +77,8 @@ export async function POST(
     .single();
 
   const plan = ((profile as Record<string, unknown>)?.plan as PlanTier) ?? "free";
-  const generationsUsed = ((profile as Record<string, unknown>)?.generation_count as number) ?? 0;
-  const billingCycleStart = ((profile as Record<string, unknown>)?.generation_reset_at as string) ?? null;
+  const generationsUsed = ((profile as Record<string, unknown>)?.generations_used as number) ?? 0;
+  const billingCycleStart = ((profile as Record<string, unknown>)?.billing_cycle_start as string) ?? null;
   const planConfig = PLAN_CONFIGS[plan];
 
   // Check if billing cycle needs reset (monthly)
@@ -91,8 +93,8 @@ export async function POST(
       await supabase
         .from("profiles")
         .update({
-          generation_count: 0,
-          generation_reset_at: now.toISOString(),
+          generations_used: 0,
+          billing_cycle_start: now.toISOString(),
         } as Record<string, unknown>)
         .eq("id", user.id);
     }
@@ -131,24 +133,59 @@ export async function POST(
   }
 
   // ---- Start generation ----
-  try {
-    // Expand short prompts for better generation quality;
-    // the original prompt is stored in the asset for cache matching
-    const expandedPrompt = expandPromptForGeneration(prompt);
-    const result = await withRetry(
+  // Resolve provider: "auto" uses smart routing based on prompt category
+  const resolvedProvider = resolveProvider(providerHint, prompt);
+  const fallbackProvider = resolvedProvider === "meshy" ? "tripo" : "meshy";
+
+  // Expand/enrich prompts for better generation quality;
+  // the original prompt is stored in the asset for cache matching
+  const shouldEnhance = enhance !== false; // Default to true
+  let expandedPrompt: string;
+  if (shouldEnhance && !imageUrl) {
+    try {
+      expandedPrompt = await enrichPrompt(prompt);
+      console.log(`[generate] Enriched prompt: "${expandedPrompt}"`);
+    } catch {
+      expandedPrompt = expandPromptForGeneration(prompt);
+    }
+  } else {
+    expandedPrompt = expandPromptForGeneration(prompt);
+  }
+
+  async function attemptGeneration(provider: string) {
+    return withRetry(
       () =>
         imageUrl
-          ? generateFromImage(imageUrl, { provider: "meshy" })
-          : generateFromText(expandedPrompt, { style, provider: "meshy" }),
+          ? generateFromImage(imageUrl, { provider })
+          : generateFromText(expandedPrompt, { style, provider }),
       2,
       3000
     );
+  }
+
+  try {
+    let result;
+    let usedProvider = resolvedProvider;
+
+    try {
+      result = await attemptGeneration(resolvedProvider);
+    } catch (primaryErr) {
+      // Primary provider failed — try fallback silently
+      console.warn(`[generate] ${resolvedProvider} failed, trying ${fallbackProvider}:`, primaryErr);
+      try {
+        result = await attemptGeneration(fallbackProvider);
+        usedProvider = fallbackProvider;
+      } catch {
+        // Both providers failed — throw the primary error
+        throw primaryErr;
+      }
+    }
 
     // Increment generation count
     await supabase
       .from("profiles")
       .update({
-        generation_count: generationsUsed + 1,
+        generations_used: generationsUsed + 1,
       } as Record<string, unknown>)
       .eq("id", user.id);
 
@@ -157,9 +194,14 @@ export async function POST(
       taskId: result.taskId,
       status: result.status,
       prompt: normalizedPrompt,
+      provider: usedProvider,
+      enhancedPrompt: expandedPrompt !== prompt ? expandedPrompt : undefined,
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Generation failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    // Return a friendly error — never expose raw provider messages
+    return NextResponse.json(
+      { error: "Generation is temporarily unavailable. Please try again in a moment." },
+      { status: 500 }
+    );
   }
 }

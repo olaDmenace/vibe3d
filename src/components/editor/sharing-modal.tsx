@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Share {
   id: string;
@@ -34,6 +35,7 @@ export function SharingModal({ open, onClose, projectId }: SharingModalProps) {
   const [permission, setPermission] = useState<"view" | "edit" | "admin">("view");
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState("");
+  const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
 
   const loadShares = useCallback(async () => {
     setLoading(true);
@@ -82,8 +84,14 @@ export function SharingModal({ open, onClose, projectId }: SharingModalProps) {
     }
   };
 
-  const handleRemove = async (shareId: string) => {
-    if (!confirm("Remove this collaborator?")) return;
+  const handleRemove = (shareId: string) => {
+    setRemoveConfirm(shareId);
+  };
+
+  const confirmRemove = async () => {
+    if (!removeConfirm) return;
+    const shareId = removeConfirm;
+    setRemoveConfirm(null);
     await fetch(`/api/projects/${projectId}/shares/${shareId}`, { method: "DELETE" });
     setShares((prev) => prev.filter((s) => s.id !== shareId));
   };
@@ -220,6 +228,16 @@ export function SharingModal({ open, onClose, projectId }: SharingModalProps) {
             </div>
           )}
         </div>
+
+        <ConfirmDialog
+          open={removeConfirm !== null}
+          title="Remove Collaborator"
+          message="Remove this collaborator from the project?"
+          confirmLabel="Remove"
+          variant="danger"
+          onConfirm={confirmRemove}
+          onCancel={() => setRemoveConfirm(null)}
+        />
       </div>
     </div>
   );

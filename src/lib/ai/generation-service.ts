@@ -1,4 +1,5 @@
 import { MeshyProvider } from "./meshy-provider";
+import { TripoProvider } from "./tripo-provider";
 import type {
   ModelGenerationProvider,
   GenerationResult,
@@ -53,21 +54,111 @@ export function expandPromptForGeneration(prompt: string): string {
   return parts.join(", ");
 }
 
+/* ------------------------------------------------------------------ */
+/*  Smart Provider Routing                                             */
+/* ------------------------------------------------------------------ */
+
+/** Keywords that suggest organic/natural shapes — route to Tripo */
+const ORGANIC_KEYWORDS = [
+  "animal", "bear", "bird", "bunny", "butterfly", "cat", "character",
+  "creature", "dinosaur", "dog", "dragon", "elephant", "face", "figure",
+  "fish", "flower", "food", "frog", "fruit", "head", "horse", "human",
+  "lion", "monkey", "monster", "mushroom", "octopus", "person", "pet",
+  "plant", "plush", "rabbit", "shark", "skull", "snake", "teddy",
+  "tree", "troll", "unicorn", "wolf", "zombie",
+];
+
+/** Keywords that suggest hard-surface/mechanical shapes — route to Meshy */
+const HARD_SURFACE_KEYWORDS = [
+  "airplane", "architecture", "armor", "axe", "bike", "blade", "boat",
+  "bottle", "box", "building", "bus", "cabinet", "car", "castle",
+  "chair", "chest", "city", "computer", "console", "cup", "desk",
+  "door", "engine", "furniture", "gadget", "gate", "gear", "gun",
+  "hammer", "helmet", "house", "jet", "keyboard", "knife", "lamp",
+  "machine", "mechanical", "metal", "monitor", "motorcycle", "mug",
+  "phone", "pistol", "plane", "rifle", "robot", "rocket", "shelf",
+  "shield", "ship", "spaceship", "sword", "table", "tank", "tool",
+  "tower", "train", "truck", "turret", "vehicle", "wall", "weapon",
+  "wheel", "window",
+];
+
 /**
- * Provider registry. The first provider is the default.
- * Future: add TripoProvider, ReplicateProvider.
+ * Determine the best provider for a prompt based on object category.
+ * - Organic/natural objects → Tripo (better at organic shapes)
+ * - Hard-surface/mechanical → Meshy (better at hard-surface)
+ * - Unknown → Meshy (default)
+ */
+export function routeProvider(prompt: string): "meshy" | "tripo" {
+  const lower = prompt.toLowerCase();
+  const words = lower.split(/\s+/);
+
+  let organicScore = 0;
+  let hardSurfaceScore = 0;
+
+  for (const word of words) {
+    if (ORGANIC_KEYWORDS.some((kw) => word.includes(kw))) organicScore++;
+    if (HARD_SURFACE_KEYWORDS.some((kw) => word.includes(kw))) hardSurfaceScore++;
+  }
+
+  if (hardSurfaceScore > organicScore) return "meshy";
+  return "tripo";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Provider Registry                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Provider registry. Tripo is conditionally registered based on
+ * whether TRIPO_API_KEY is set. Falls back to Meshy when unavailable.
  */
 const providers: Record<string, ModelGenerationProvider> = {
   meshy: new MeshyProvider(),
-  // tripo: new TripoProvider(),     // future: fast mode
-  // replicate: new ReplicateProvider(), // future: flexibility
 };
 
+// Conditionally register Tripo if API key is available
+if (process.env.TRIPO_API_KEY) {
+  providers.tripo = new TripoProvider();
+}
+
+/** Get list of available provider names */
+export function getAvailableProviders(): string[] {
+  return Object.keys(providers);
+}
+
 function getProvider(name?: string): ModelGenerationProvider {
-  const key = name ?? "meshy";
-  const provider = providers[key];
-  if (!provider) throw new Error(`Unknown generation provider: ${key}`);
-  return provider;
+  const key = name ?? "tripo";
+
+  // If requested provider isn't available, fall back to the other
+  if (!providers[key]) {
+    const fallback = key === "tripo" ? "meshy" : "tripo";
+    if (providers[fallback]) {
+      console.warn(`[generation] ${key} provider not available, falling back to ${fallback}`);
+      return providers[fallback];
+    }
+    throw new Error(`No generation provider available (tried: ${key}, ${fallback})`);
+  }
+  return providers[key];
+}
+
+/**
+ * Resolve which provider to use.
+ * - "auto" or undefined → smart routing based on prompt
+ * - "meshy" or "tripo" → use that provider (with fallback)
+ */
+export function resolveProvider(
+  providerHint: string | undefined,
+  prompt: string
+): string {
+  if (!providerHint || providerHint === "auto") {
+    const routed = routeProvider(prompt);
+    // Fall back to tripo if routed provider isn't available
+    if (!providers[routed]) return providers.tripo ? "tripo" : "meshy";
+    return routed;
+  }
+  // If explicitly requested provider isn't available, fall back
+  if (!providers[providerHint]) return providers.tripo ? "tripo" : "meshy";
+  return providerHint;
 }
 
 /* ------------------------------------------------------------------ */

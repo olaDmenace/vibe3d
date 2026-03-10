@@ -60,6 +60,18 @@ export function SceneHierarchy() {
                   {PRIMITIVE_ICONS[obj.assetId] ?? <Box size={14} />}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{obj.name}</span>
+                {typeof obj.metadata?.provider === "string" && (
+                  <span
+                    className="flex-shrink-0 rounded px-1 py-px text-[8px] font-medium leading-none"
+                    style={{
+                      background: obj.metadata.provider === "tripo" ? "rgba(124, 196, 248, 0.15)" : "rgba(168, 85, 247, 0.15)",
+                      color: obj.metadata.provider === "tripo" ? "rgba(124, 196, 248, 0.7)" : "rgba(168, 85, 247, 0.7)",
+                    }}
+                    title={obj.metadata.provider === "tripo" ? "Generated with Tripo" : "Generated with Meshy"}
+                  >
+                    {obj.metadata.provider === "tripo" ? "T" : "M"}
+                  </span>
+                )}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                   <button
                     onClick={(e) => {

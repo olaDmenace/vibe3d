@@ -19,9 +19,9 @@ export async function GET() {
 
   const plan = ((profile as Record<string, unknown> | null)?.plan as PlanTier) ?? "free";
   const planConfig = PLAN_CONFIGS[plan];
-  const generationsUsed = ((profile as Record<string, unknown> | null)?.generation_count as number) ?? 0;
+  const generationsUsed = ((profile as Record<string, unknown> | null)?.generations_used as number) ?? 0;
   const generationLimit = ((profile as Record<string, unknown> | null)?.generation_limit as number) ?? planConfig.generationLimit;
-  const billingCycleStart = ((profile as Record<string, unknown> | null)?.generation_reset_at as string) ?? null;
+  const billingCycleStart = ((profile as Record<string, unknown> | null)?.billing_cycle_start as string) ?? null;
 
   return NextResponse.json({
     plan,

@@ -67,9 +67,10 @@ export async function GET(
 
   const url = new URL(request.url);
   const isRefine = url.searchParams.get("refine") === "true";
+  const providerName = url.searchParams.get("provider") || undefined;
 
-  // Check generation status (with retry for transient Meshy failures)
-  const status = await withRetry(() => checkGenerationStatus(jobId), 1, 2000);
+  // Check generation status (with retry for transient failures)
+  const status = await withRetry(() => checkGenerationStatus(jobId, providerName), 1, 2000);
 
   // If complete, download and store the model, then return a Supabase signed URL
   let signedModelUrl: string | null = null;
@@ -79,15 +80,18 @@ export async function GET(
 
   if (status.status === "complete" && status.modelUrl) {
     // If this is a preview completing (not a refine), start a refine task
-    if (!isRefine) {
+    // Only Meshy supports the two-step preview+refine pipeline
+    const supportsRefine = !providerName || providerName === "meshy";
+    if (!isRefine && supportsRefine) {
       try {
-        const refineResult = await refineModel(jobId);
+        const refineResult = await refineModel(jobId, providerName);
         return NextResponse.json({
           status: "refining",
           progress: 0,
           previewTaskId: jobId,
           refineTaskId: refineResult.taskId,
           thumbnailUrl: status.thumbnailUrl,
+          provider: providerName || "meshy",
         });
       } catch (refineErr) {
         // Refine failed — fall through to use the preview model
@@ -113,8 +117,29 @@ export async function GET(
       meshCount = (meta?.meshCount as number) ?? 0;
     } else {
       try {
-        // Download the model from Meshy CDN (server-side, no CORS)
-        const { buffer: rawBuffer } = await downloadModel(status.modelUrl);
+        // Download the model from provider CDN (server-side, no CORS)
+        console.log(`[generate] Downloading model from: ${status.modelUrl} (provider: ${providerName || "meshy"})`);
+
+        let rawBuffer: ArrayBuffer;
+        try {
+          const downloaded = await downloadModel(status.modelUrl);
+          rawBuffer = downloaded.buffer;
+          console.log(`[generate] Downloaded buffer size: ${rawBuffer.byteLength}`);
+        } catch (downloadErr) {
+          console.warn("[generate] Plain download failed, retrying with auth:", downloadErr);
+          // Tripo CDN may require the API key as a Bearer token
+          const tripoKey = process.env.TRIPO_API_KEY;
+          if (providerName === "tripo" && tripoKey) {
+            const res = await fetch(status.modelUrl, {
+              headers: { Authorization: `Bearer ${tripoKey}` },
+            });
+            if (!res.ok) throw new Error(`Auth download failed: ${res.status}`);
+            rawBuffer = await res.arrayBuffer();
+            console.log(`[generate] Downloaded with auth, buffer size: ${rawBuffer.byteLength}`);
+          } else {
+            throw downloadErr;
+          }
+        }
 
         // --- Mesh cleanup (weld, dedup, prune, doubleSided) ---
         const buffer = await cleanupMesh(rawBuffer);
@@ -219,6 +244,7 @@ export async function GET(
     thumbnailUrl: status.thumbnailUrl,
     meshNames,
     meshCount,
-    error: status.error,
+    error: status.error ? "Generation failed. Please try again." : undefined,
+    provider: providerName || "meshy",
   });
 }

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import type { EditorAction } from "@/types/actions";
 import { getSpawnPosition } from "@/lib/scene-utils";
+import { toast } from "@/store/toast-store";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -67,12 +68,21 @@ const SCENE_TEMPLATES = [
   },
 ];
 
+const PROVIDER_LABELS: Record<string, string> = {
+  auto: "Vibe3D AI",
+  meshy: "Vibe3D AI\u00B7M",
+  tripo: "Vibe3D AI\u00B7T",
+};
+
 interface GenerationJob {
   taskId: string;
   prompt: string;
   status: "pending" | "processing" | "complete" | "failed";
   progress: number;
   error?: string;
+  provider?: string;
+  enhancedPrompt?: string;
+  sourceImage?: string;
 }
 
 /** Clean a generation prompt into a proper object name */
@@ -137,10 +147,14 @@ function isSceneRequest(message: string): boolean {
   return scenePatterns.some((p) => p.test(message));
 }
 
+type InputMode = "text" | "image" | "scene";
+
 function GenerationResultCard({ message }: { message: ChatMessage }) {
+  const sourceImage = message.metadata?.sourceImage as string | undefined;
   const thumbnailUrl = message.metadata?.thumbnailUrl as string | undefined;
   const meshCount = message.metadata?.meshCount as number | undefined;
   const objectName = message.metadata?.objectName as string | undefined;
+  const enhancedPrompt = message.metadata?.enhancedPrompt as string | undefined;
 
   return (
     <div
@@ -155,20 +169,37 @@ function GenerationResultCard({ message }: { message: ChatMessage }) {
           fontFamily: "'Spline Sans', sans-serif",
         }}
       >
-        {thumbnailUrl && (
-          <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={thumbnailUrl}
-              alt={objectName || "Generated model"}
-              className="w-full h-32 object-cover"
-            />
-            <div
-              className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] text-white"
-              style={{ background: "rgba(0, 0, 0, 0.6)" }}
-            >
-              3D Model
-            </div>
+        {/* Side-by-side for image-to-3D, single thumbnail for text-to-3D */}
+        {(sourceImage || thumbnailUrl) && (
+          <div className="flex relative">
+            {sourceImage && (
+              <div className="relative" style={{ width: thumbnailUrl ? "50%" : "100%" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={sourceImage} alt="Original" className="w-full h-32 object-cover" />
+                <span
+                  className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[9px] text-white"
+                  style={{ background: "rgba(0, 0, 0, 0.6)" }}
+                >
+                  Original
+                </span>
+              </div>
+            )}
+            {thumbnailUrl && (
+              <div className="relative" style={{ width: sourceImage ? "50%" : "100%" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={thumbnailUrl}
+                  alt={objectName || "Generated model"}
+                  className="w-full h-32 object-cover"
+                />
+                <div
+                  className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] text-white"
+                  style={{ background: "rgba(0, 0, 0, 0.6)" }}
+                >
+                  3D Model
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="px-3 py-2">
@@ -181,6 +212,16 @@ function GenerationResultCard({ message }: { message: ChatMessage }) {
             </p>
           )}
           <p className="text-[10px] text-white/40 mt-1">Added to scene</p>
+          {enhancedPrompt && (
+            <details className="mt-2">
+              <summary className="text-[10px] text-white/30 cursor-pointer hover:text-white/50">
+                View enhanced prompt
+              </summary>
+              <p className="text-[10px] text-white/30 mt-1 italic leading-relaxed">
+                {enhancedPrompt}
+              </p>
+            </details>
+          )}
         </div>
       </div>
     </div>
@@ -197,6 +238,10 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string>("realistic");
+  const [selectedProvider, setSelectedProvider] = useState<string>("auto");
+  const [enhancePrompt, setEnhancePrompt] = useState(true);
+  const [inputMode, setInputMode] = useState<InputMode>("text");
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -243,7 +288,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
   // Supports two-step preview+refine: when the server returns "refining",
   // the client switches to polling the refine task ID.
   const pollGeneration = useCallback(
-    (initialTaskId: string, prompt: string) => {
+    (initialTaskId: string, prompt: string, provider?: string, extras?: { enhancedPrompt?: string; sourceImage?: string }) => {
       if (!projectId) return;
 
       // Reset the one-shot gate for this new generation
@@ -289,8 +334,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
 
         try {
           const refineParam = isRefining ? "&refine=true" : "";
+          const providerParam = provider ? `&provider=${provider}` : "";
           const res = await fetch(
-            `/api/projects/${projectId}/generate/${currentTaskId}?prompt=${encodeURIComponent(prompt)}${refineParam}`
+            `/api/projects/${projectId}/generate/${currentTaskId}?prompt=${encodeURIComponent(prompt)}${refineParam}${providerParam}`
           );
           const data = await res.json();
 
@@ -353,6 +399,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                   storagePath: data.storagePath,
                   meshNames: resMeshNames,
                   meshCount: resMeshCount,
+                  provider: provider || data.provider,
                 },
               },
             });
@@ -378,6 +425,8 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
                   thumbnailUrl: data.thumbnailUrl,
                   meshCount: resMeshCount,
                   objectName: cleanPromptForName(prompt),
+                  enhancedPrompt: extras?.enhancedPrompt,
+                  sourceImage: extras?.sourceImage,
                 },
               },
             ]);
@@ -435,6 +484,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         } catch {
           // Network error — retry with backoff unless already handled
           if (!generationHandledRef.current && pollCount < MAX_POLLS) {
+            if (pollCount === 3) toast.warning("Network issue — retrying generation check...");
             delay = Math.min(delay * BACKOFF_FACTOR, MAX_DELAY);
             pollTimeoutRef.current = setTimeout(poll, delay);
           }
@@ -473,7 +523,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const res = await fetch(`/api/projects/${projectId}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: pendingPrompt, style: selectedStyle }),
+          body: JSON.stringify({ prompt: pendingPrompt, style: selectedStyle, provider: "auto", enhance: enhancePrompt }),
         });
         const data = await res.json();
 
@@ -508,8 +558,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             { role: "assistant", content: `Found a cached model for "${cleanPromptForName(pendingPrompt)}" and added it to your scene.`, timestamp: new Date().toISOString() },
           ]);
         } else {
-          setGenerationJob({ taskId: data.taskId, prompt: pendingPrompt, status: "pending", progress: 0 });
-          pollGeneration(data.taskId, pendingPrompt);
+          const resolvedProvider = data.provider || "meshy";
+          setGenerationJob({ taskId: data.taskId, prompt: pendingPrompt, status: "pending", progress: 0, provider: resolvedProvider, enhancedPrompt: data.enhancedPrompt });
+          pollGeneration(data.taskId, pendingPrompt, resolvedProvider, { enhancedPrompt: data.enhancedPrompt });
           setMessages((prev) => [
             ...prev,
             { role: "assistant", content: `Generating 3D model for "${cleanPromptForName(pendingPrompt)}"... This may take a minute.`, timestamp: new Date().toISOString() },
@@ -517,6 +568,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         }
       } catch {
         useGenerationStore.getState().clearGeneration();
+        toast.error("Connection lost — please check your network and try again.");
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Failed to start generation. Please try again.", timestamp: new Date().toISOString() },
@@ -564,7 +616,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       const res = await fetch(`/api/projects/${projectId}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "image-to-3d", imageUrl: urlData.signedUrl }),
+        body: JSON.stringify({ prompt: "image-to-3d", imageUrl: urlData.signedUrl, provider: selectedProvider }),
       });
       const data = await res.json();
 
@@ -599,8 +651,9 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           { role: "assistant", content: "Found a cached model and added it to your scene.", timestamp: new Date().toISOString() },
         ]);
       } else {
-        setGenerationJob({ taskId: data.taskId, prompt: "Image-to-3D", status: "pending", progress: 0 });
-        pollGeneration(data.taskId, "Image-to-3D");
+        const capturedImage = imagePreview || undefined;
+        setGenerationJob({ taskId: data.taskId, prompt: "Image-to-3D", status: "pending", progress: 0, sourceImage: capturedImage });
+        pollGeneration(data.taskId, "Image-to-3D", undefined, { sourceImage: capturedImage });
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Generating 3D model from your image... This may take a minute.", timestamp: new Date().toISOString() },
@@ -609,6 +662,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     } catch (err) {
       console.error("Image upload failed:", err);
       useGenerationStore.getState().clearGeneration();
+      toast.error("Connection lost — please check your network and try again.");
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Failed to process image. Please try again.", timestamp: new Date().toISOString() },
@@ -617,7 +671,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
       setUploadingImage(false);
       setImagePreview(null);
     }
-  }, [projectId, dispatch, pollGeneration, supabase.storage]);
+  }, [projectId, dispatch, pollGeneration, supabase.storage, selectedProvider]);
 
   // --- Scene Builder ---
 
@@ -755,7 +809,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           const res = await fetch(`/api/projects/${projectId}/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: obj.prompt, style: selectedStyle }),
+            body: JSON.stringify({ prompt: obj.prompt, style: selectedStyle, provider: selectedProvider, enhance: enhancePrompt }),
           });
           const data = await res.json();
 
@@ -813,12 +867,13 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     } catch (err) {
       console.error("Scene generation failed:", err);
       useGenerationStore.getState().clearGeneration();
+      toast.error("Connection lost — please check your network and try again.");
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Failed to plan the scene. Please try again.", timestamp: new Date().toISOString() },
       ]);
     }
-  }, [projectId, decomposeScene, pollGenerationForScene, dispatch, selectedStyle]);
+  }, [projectId, decomposeScene, pollGenerationForScene, dispatch, selectedStyle, selectedProvider]);
 
   const handleSend = async () => {
     const trimmed = message.trim();
@@ -854,7 +909,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         const res = await fetch(`/api/projects/${projectId}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: genPrompt, style: selectedStyle }),
+          body: JSON.stringify({ prompt: genPrompt, style: selectedStyle, provider: selectedProvider, enhance: enhancePrompt }),
         });
         const data = await res.json();
 
@@ -864,6 +919,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             data.upgrade
               ? `You've reached your generation limit (${data.used}/${data.limit}). Upgrade your plan for more.`
               : data.error || "Generation failed";
+          toast.error(errorMsg);
           setMessages((prev) => [
             ...prev,
             { role: "assistant", content: errorMsg, timestamp: new Date().toISOString() },
@@ -899,14 +955,17 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             },
           ]);
         } else {
-          // Start polling
+          // Start polling — pass resolved provider for correct status checks
+          const resolvedProvider = data.provider || "meshy";
           setGenerationJob({
             taskId: data.taskId,
             prompt: genPrompt,
             status: "pending",
             progress: 0,
+            provider: resolvedProvider,
+            enhancedPrompt: data.enhancedPrompt,
           });
-          pollGeneration(data.taskId, genPrompt);
+          pollGeneration(data.taskId, genPrompt, resolvedProvider, { enhancedPrompt: data.enhancedPrompt });
           setMessages((prev) => [
             ...prev,
             {
@@ -918,6 +977,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         }
       } catch {
         useGenerationStore.getState().clearGeneration();
+        toast.error("Connection lost — please check your network and try again.");
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Failed to start generation. Please try again.", timestamp: new Date().toISOString() },
@@ -964,7 +1024,7 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Failed to send message. Please try again.", timestamp: new Date().toISOString() },
+        { role: "assistant", content: "Failed to send message. Please check your connection and try again.", timestamp: new Date().toISOString() },
       ]);
     }
     setIsAITyping(false);
@@ -1250,159 +1310,397 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
         </div>
       )}
 
+      {/* Mode selector tabs */}
+      <div
+        className="flex items-center gap-0.5 mb-1.5"
+        style={{
+          padding: "2px",
+          background: "rgba(31, 31, 24, 0.8)",
+          border: "1px solid rgba(222, 220, 209, 0.1)",
+          borderRadius: 10,
+          width: "fit-content",
+        }}
+      >
+        {(
+          [
+            { mode: "text" as InputMode, label: "Text to 3D", icon: "T" },
+            { mode: "image" as InputMode, label: "Image to 3D", icon: null },
+            { mode: "scene" as InputMode, label: "Scene Builder", icon: null },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.mode}
+            onClick={() => setInputMode(tab.mode)}
+            className="transition-colors"
+            style={{
+              padding: "5px 12px",
+              borderRadius: 8,
+              fontFamily: "'Spline Sans', sans-serif",
+              fontSize: 11,
+              letterSpacing: "0.2px",
+              color: inputMode === tab.mode ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)",
+              background: inputMode === tab.mode ? "rgba(62, 62, 62, 0.7)" : "transparent",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Main input container */}
       <div
         style={{
           width: 626,
-          height: 145,
+          minHeight: inputMode === "image" ? 180 : inputMode === "scene" ? 200 : 145,
           background: "#1F1F18",
           border: "1px solid rgba(222, 220, 209, 0.15)",
           backdropFilter: "blur(16px)",
           borderRadius: 20,
           position: "relative",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        {/* Inner textarea container */}
+        {/* Inner content container */}
         <div
           style={{
-            position: "absolute",
-            top: 2,
-            left: 2,
-            width: 622,
-            height: 108,
+            margin: 2,
+            flex: 1,
             background: "rgba(62, 62, 62, 0.5)",
             boxShadow:
               "0px 20.6px 16.5px rgba(26, 0, 108, 0.04), 0px 2.55px 2.04px rgba(26, 0, 108, 0.02)",
             borderRadius: 18,
             display: "flex",
             flexDirection: "column",
+            minHeight: 0,
           }}
         >
-          {/* Textarea area */}
-          <div className="relative flex-1 px-4 pt-3">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isAuthenticated ? "Start creating..." : "Sign in to use AI chat"}
-              disabled={sending || !isAuthenticated}
-              className="w-full h-full bg-transparent text-white/90 placeholder:text-white/40 outline-none resize-none disabled:opacity-50"
-              style={{
-                fontFamily: "'Spline Sans', sans-serif",
-                fontSize: 11,
-                letterSpacing: "0.3px",
-                lineHeight: "16px",
-              }}
-            />
-            {!isAuthenticated && (
-              <a
-                href="/sign-in"
-                className="absolute bottom-2 left-4 text-[10px] underline"
-                style={{ color: "#7CC4F8", fontFamily: "'Spline Sans', sans-serif" }}
-              >
-                Sign in to use AI chat
-              </a>
-            )}
-          </div>
-
-          {/* Bottom row inside textarea container */}
-          <div className="flex items-center justify-between px-3 pb-3">
-            {/* Attach / Image upload button (left) */}
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageUpload(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              title="Upload image for 3D generation"
-              disabled={uploadingImage}
-              onClick={() => imageInputRef.current?.click()}
-              className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors disabled:opacity-40"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                background: "transparent",
-                border: "none",
-              }}
-            >
-              <Image
-                src="/assets/icons/dashboard-attach.svg"
-                alt="Upload Image"
-                width={40}
-                height={40}
-                style={{ opacity: 0.7 }}
-              />
-            </button>
-
-            {/* Send / Audio buttons (right) */}
-            <div className="flex items-center gap-1">
-              {message.trim().length > 0 && (
-                <button
-                  onClick={handleSend}
-                  disabled={sending}
-                  title="Send"
-                  className="flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors disabled:opacity-40"
+          {/* ===== TEXT MODE ===== */}
+          {inputMode === "text" && (
+            <>
+              <div className="relative flex-1 px-4 pt-3">
+                <textarea
+                  ref={textareaRef}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isAuthenticated ? "Describe what you want to create..." : "Sign in to use AI chat"}
+                  disabled={sending || !isAuthenticated}
+                  className="w-full h-full bg-transparent text-white/90 placeholder:text-white/40 outline-none resize-none disabled:opacity-50"
                   style={{
-                    width: 32,
-                    height: 32,
+                    fontFamily: "'Spline Sans', sans-serif",
+                    fontSize: 11,
+                    letterSpacing: "0.3px",
+                    lineHeight: "16px",
+                  }}
+                />
+                {!isAuthenticated && (
+                  <a
+                    href="/sign-in"
+                    className="absolute bottom-2 left-4 text-[10px] underline"
+                    style={{ color: "#7CC4F8", fontFamily: "'Spline Sans', sans-serif" }}
+                  >
+                    Sign in to use AI chat
+                  </a>
+                )}
+              </div>
+              <div className="flex items-center justify-between px-3 pb-3">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  title="Upload image for 3D generation"
+                  disabled={uploadingImage}
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors disabled:opacity-40"
+                  style={{
+                    width: 36,
+                    height: 36,
                     borderRadius: 8,
-                    background: "rgba(124, 196, 248, 0.15)",
+                    background: "transparent",
                     border: "none",
                   }}
                 >
-                  {sending ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
-                      <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-                      <path d="M12.5 7A5.5 5.5 0 0 0 7 1.5" stroke="#7CC4F8" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                  ) : (
+                  <Image
+                    src="/assets/icons/dashboard-attach.svg"
+                    alt="Upload Image"
+                    width={40}
+                    height={40}
+                    style={{ opacity: 0.7 }}
+                  />
+                </button>
+                <div className="flex items-center gap-1">
+                  {message.trim().length > 0 && (
+                    <button
+                      onClick={handleSend}
+                      disabled={sending}
+                      title="Send"
+                      className="flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors disabled:opacity-40"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "rgba(124, 196, 248, 0.15)",
+                        border: "none",
+                      }}
+                    >
+                      {sending ? (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
+                          <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+                          <path d="M12.5 7A5.5 5.5 0 0 0 7 1.5" stroke="#7CC4F8" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="#7CC4F8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    title="Voice Input"
+                    className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: "transparent",
+                      border: "none",
+                    }}
+                  >
+                    <Image
+                      src="/assets/icons/dashboard-audio.svg"
+                      alt="Audio"
+                      width={40}
+                      height={40}
+                      style={{ opacity: 0.7 }}
+                    />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ===== IMAGE MODE ===== */}
+          {inputMode === "image" && (
+            <div className="flex flex-col flex-1">
+              {!pendingImageFile ? (
+                <div
+                  className="flex-1 flex flex-col items-center justify-center cursor-pointer m-2 rounded-xl transition-colors"
+                  style={{
+                    border: "2px dashed rgba(124, 196, 248, 0.25)",
+                    background: isDragOver ? "rgba(124, 196, 248, 0.08)" : "rgba(124, 196, 248, 0.03)",
+                    minHeight: 100,
+                  }}
+                  onClick={() => imageInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDragOver(false);
+                    const file = e.dataTransfer.files[0];
+                    if (file && file.type.startsWith("image/")) {
+                      setPendingImageFile(file);
+                      setImagePreview(URL.createObjectURL(file));
+                    }
+                  }}
+                >
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setPendingImageFile(file);
+                        setImagePreview(URL.createObjectURL(file));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="mb-2 opacity-40">
+                    <rect x="3" y="5" width="22" height="18" rx="3" stroke="rgba(124,196,248,0.7)" strokeWidth="1.5" />
+                    <circle cx="10" cy="12" r="2.5" stroke="rgba(124,196,248,0.7)" strokeWidth="1.2" />
+                    <path d="M3 19L9 14L13 17L19 11L25 17" stroke="rgba(124,196,248,0.7)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <p style={{ fontFamily: "'Spline Sans', sans-serif", fontSize: 12, color: "rgba(124, 196, 248, 0.7)" }}>
+                    Drop an image here or click to browse
+                  </p>
+                  <p style={{ fontFamily: "'Spline Sans', sans-serif", fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>
+                    PNG, JPG, or WebP — clear photos with one subject work best
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center gap-3 px-4 py-3">
+                  <div className="relative flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imagePreview || ""}
+                      alt="Selected image"
+                      className="rounded-lg object-cover border border-white/10"
+                      style={{ width: 80, height: 80 }}
+                    />
+                    <button
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#1F1F18] border border-white/15 text-white/50 hover:text-white flex items-center justify-center text-[9px]"
+                      onClick={() => {
+                        setPendingImageFile(null);
+                        if (imagePreview) URL.revokeObjectURL(imagePreview);
+                        setImagePreview(null);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-2 flex-1">
+                    <p style={{ fontFamily: "'Spline Sans', sans-serif", fontSize: 11, color: "rgba(255,255,255,0.7)" }}>
+                      {pendingImageFile.name}
+                    </p>
+                    <button
+                      onClick={() => {
+                        if (pendingImageFile) {
+                          handleImageUpload(pendingImageFile);
+                          setPendingImageFile(null);
+                        }
+                      }}
+                      disabled={uploadingImage}
+                      className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      style={{
+                        background: "rgba(124, 196, 248, 0.2)",
+                        border: "1px solid rgba(124, 196, 248, 0.3)",
+                        color: "#7CC4F8",
+                        fontFamily: "'Spline Sans', sans-serif",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        cursor: uploadingImage ? "default" : "pointer",
+                      }}
+                    >
+                      {uploadingImage ? (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
+                            <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+                            <path d="M12.5 7A5.5 5.5 0 0 0 7 1.5" stroke="#7CC4F8" strokeWidth="1.5" strokeLinecap="round" />
+                          </svg>
+                          Generating...
+                        </>
+                      ) : (
+                        "Generate 3D Model from Image"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Image-to-3D tips */}
+              {!pendingImageFile && (
+                <div className="px-3 pb-2">
+                  <div className="flex items-center gap-3" style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "'Spline Sans', sans-serif" }}>
+                    <span>Tips: single object</span>
+                    <span>clean background</span>
+                    <span>good lighting</span>
+                    <span>no text overlays</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== SCENE BUILDER MODE ===== */}
+          {inputMode === "scene" && (
+            <div className="flex flex-col flex-1 px-3 py-3 gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {SCENE_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] transition-colors"
+                    style={{
+                      border: "1px solid rgba(222, 220, 209, 0.12)",
+                      color: "rgba(255, 255, 255, 0.55)",
+                      background: "rgba(255, 255, 255, 0.03)",
+                      fontFamily: "'Spline Sans', sans-serif",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(99, 102, 241, 0.1)";
+                      e.currentTarget.style.color = "rgba(165, 180, 252, 0.9)";
+                      e.currentTarget.style.borderColor = "rgba(99, 102, 241, 0.3)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)";
+                      e.currentTarget.style.color = "rgba(255, 255, 255, 0.55)";
+                      e.currentTarget.style.borderColor = "rgba(222, 220, 209, 0.12)";
+                    }}
+                    onClick={() => handleSceneGeneration(t.prompt)}
+                  >
+                    <span>{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 flex-1">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Or describe your scene: 'A cozy reading nook with a beanbag, side table, and floor lamp'"
+                  className="flex-1 bg-transparent text-white/90 placeholder:text-white/30 outline-none resize-none"
+                  style={{
+                    fontFamily: "'Spline Sans', sans-serif",
+                    fontSize: 11,
+                    lineHeight: "16px",
+                    minHeight: 48,
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && message.trim()) {
+                      e.preventDefault();
+                      handleSceneGeneration(message.trim());
+                      setMessage("");
+                    }
+                  }}
+                />
+                {message.trim() && (
+                  <button
+                    onClick={() => {
+                      handleSceneGeneration(message.trim());
+                      setMessage("");
+                    }}
+                    className="self-end flex items-center justify-center"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background: "rgba(124, 196, 248, 0.15)",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="#7CC4F8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  )}
-                </button>
-              )}
-              <button
-                title="Voice Input"
-                className="flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: "transparent",
-                  border: "none",
-                }}
-              >
-                <Image
-                  src="/assets/icons/dashboard-audio.svg"
-                  alt="Audio"
-                  width={40}
-                  height={40}
-                  style={{ opacity: 0.7 }}
-                />
-              </button>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Image upload preview — below the input area */}
-        {imagePreview && (
+        {/* Image upload preview — below the input area (text mode only) */}
+        {inputMode === "text" && imagePreview && (
           <div
             className="flex items-center gap-2 px-4"
             style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 33,
               height: 36,
+              flexShrink: 0,
             }}
           >
             <div className="relative inline-block">
@@ -1423,15 +1721,12 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
           </div>
         )}
 
-        {/* Style selector + model row (below the inner container) */}
+        {/* Style selector + model row (bottom bar) */}
         <div
           className="flex items-center gap-1.5 px-4"
           style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
             height: 33,
+            flexShrink: 0,
           }}
         >
           {/* Sparkle icon */}
@@ -1443,20 +1738,47 @@ export function ChatPanel({ projectId, isAuthenticated = true }: { projectId?: s
             style={{ opacity: 0.5 }}
           />
 
-          {/* Model name */}
-          <span
+          {/* Model name — cycles provider on click */}
+          <button
+            onClick={() => {
+              const keys = Object.keys(PROVIDER_LABELS);
+              const idx = keys.indexOf(selectedProvider);
+              setSelectedProvider(keys[(idx + 1) % keys.length]);
+            }}
+            className="hover:opacity-80 transition-opacity cursor-pointer"
             style={{
               fontFamily: "'Spline Sans', sans-serif",
               fontSize: 11,
               color: "rgba(255, 255, 255, 0.95)",
               letterSpacing: "0.3px",
+              background: "none",
+              border: "none",
+              padding: 0,
+              whiteSpace: "nowrap",
             }}
           >
-            Vibe3D AI
-          </span>
+            {PROVIDER_LABELS[selectedProvider] || "Vibe3D AI"}
+          </button>
+
+          {/* Enhance with AI toggle */}
+          <button
+            onClick={() => setEnhancePrompt(!enhancePrompt)}
+            title={enhancePrompt ? "AI prompt enhancement ON" : "AI prompt enhancement OFF"}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] transition-colors flex-shrink-0 ml-1"
+            style={{
+              background: enhancePrompt ? "rgba(168, 85, 247, 0.2)" : "transparent",
+              color: enhancePrompt ? "rgba(216, 180, 254, 0.9)" : "rgba(255, 255, 255, 0.3)",
+              border: enhancePrompt ? "1px solid rgba(168, 85, 247, 0.3)" : "1px solid transparent",
+              fontFamily: "'Spline Sans', sans-serif",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: 11 }}>&#x2728;</span>
+            <span>Enhance</span>
+          </button>
 
           {/* Style pills */}
-          <div className="flex items-center gap-1 ml-2 overflow-x-auto">
+          <div className="flex items-center gap-1 ml-1 overflow-x-auto">
             {GENERATION_STYLES.map((style) => (
               <button
                 key={style.id}

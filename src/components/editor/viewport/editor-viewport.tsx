@@ -1,9 +1,9 @@
 "use client";
 
 import * as THREE from "three";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { EffectComposer, N8AO, Bloom } from "@react-three/postprocessing";
 import { SceneRenderer } from "./scene-renderer";
 import { EnvironmentSetup } from "./environment-setup";
@@ -49,19 +49,52 @@ export function EditorViewport() {
           <TransformGizmo />
           <OrbitControls makeDefault target={camera.target} />
           <CameraManager />
-          {enablePostProcessing && (
-            <EffectComposer>
-              <N8AO intensity={2} aoRadius={0.5} distanceFalloff={0.5} />
-              <Bloom
-                luminanceThreshold={0.9}
-                luminanceSmoothing={0.025}
-                intensity={0.3}
-              />
-            </EffectComposer>
-          )}
+          {enablePostProcessing && <DeferredPostProcessing />}
         </Suspense>
       </Canvas>
     </div>
+  );
+}
+
+/**
+ * Defers EffectComposer mount until the GL context is fully initialized.
+ * Waits for the renderer to complete its first render pass so the
+ * render target exists before postprocessing reads from it.
+ */
+function DeferredPostProcessing() {
+  const gl = useThree((s) => s.gl);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!gl) return;
+
+    // Wait multiple frames to ensure the renderer has fully initialized
+    // its render targets (single rAF is not always enough).
+    let frame = 0;
+    let id: number;
+    function wait() {
+      frame++;
+      if (frame >= 3) {
+        setReady(true);
+      } else {
+        id = requestAnimationFrame(wait);
+      }
+    }
+    id = requestAnimationFrame(wait);
+    return () => cancelAnimationFrame(id);
+  }, [gl]);
+
+  if (!ready) return null;
+
+  return (
+    <EffectComposer>
+      <N8AO intensity={2} aoRadius={0.5} distanceFalloff={0.5} />
+      <Bloom
+        luminanceThreshold={0.9}
+        luminanceSmoothing={0.025}
+        intensity={0.3}
+      />
+    </EffectComposer>
   );
 }
 

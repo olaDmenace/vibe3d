@@ -332,6 +332,36 @@ Phase 6 — Final Features Before Launch
 - [x] Consistency check: no hardcoded neutral colors, no debug logs, no unresolved TODOs in editor components
 - [x] All toolbar buttons have descriptive `title` attributes with shortcut labels
 
+### Post-Launch Sprint 1 — Provider Switching — 2026-03-09
+- [x] TripoProvider implementing ModelGenerationProvider interface
+- [x] Provider registry updated (meshy + tripo)
+- [x] Smart provider routing: organic → Tripo, hard-surface → Meshy
+- [x] Provider selector in chat UI (Auto / Meshy / Tripo)
+- [x] Polling route handles Tripo's single-pass generation (no refine step)
+- [x] Provider name passed through client → API → polling chain
+- [x] Generation messages show which provider was used
+- [x] Graceful fallback to Meshy when TRIPO_API_KEY is not set
+
+### Post-Launch Sprint 2 — Image-to-3D as Primary Feature — 2026-03-10
+- [x] Claude-powered prompt enrichment (`src/lib/ai/prompt-enricher.ts`): short prompts → detailed 3D generation prompts via Claude Sonnet
+- [x] Generate route integrates enrichment: `enhance !== false` triggers Claude enrichment, returns `enhancedPrompt` in response
+- [x] Provider fallback chain: primary provider fails → try secondary → friendly error message
+- [x] Input mode tabs: Text to 3D / Image to 3D / Scene Builder selector above main input
+- [x] Image mode: large drop zone with preview, "Generate 3D Model from Image" button, drag-and-drop support
+- [x] Image-to-3D tips panel: best practices (single object, clean background, good lighting, no text overlays)
+- [x] Scene builder mode: template grid + custom prompt textarea with send button
+- [x] "Enhance with AI" toggle button in bottom bar (purple pill, on by default)
+- [x] Enhanced prompt display: collapsible "View enhanced prompt" in generation result cards
+- [x] Side-by-side comparison: original image vs 3D model in generation result cards for image-to-3D
+- [x] Provider badge on scene hierarchy items: "T" for Tripo, "M" for Meshy (color-coded)
+- [x] Provider metadata stored in ADD_OBJECT dispatch for hierarchy badges
+- [x] Toast notification system (`src/store/toast-store.ts`, `src/components/ui/toast-container.tsx`)
+- [x] User-friendly error messages: no raw JSON or provider names exposed to users
+- [x] Subtle provider cycling button: "Vibe3D AI" / "Vibe3D AI·M" / "Vibe3D AI·T"
+- [x] Default provider changed from Meshy to Tripo
+- [x] Procedural environment maps: zero-network-dependency gradient-based env maps replacing CDN HDRI
+- [x] Build verification: tsc --noEmit + eslint + npm run build all passing
+
 ## Known Issues
 - THREE.js warnings in console: "THREE.Clock: This module has been deprecated" and "PCFSoftShadowMap has been removed" — cosmetic, from drei/three version mismatch.
 - Pre-existing lint errors in `transform-gizmo.tsx` — refs accessed during render (React 19 strict mode warning).

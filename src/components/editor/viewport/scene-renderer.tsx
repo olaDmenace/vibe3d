@@ -304,13 +304,35 @@ function GLBModelFromUrl({
       child.castShadow = true;
       child.receiveShadow = true;
 
+      // Fix AI mesh rendering: recompute normals, force double-sided, fix depth
+      child.geometry.computeVertexNormals();
+
+      const fixMaterial = (mat: THREE.Material) => {
+        if (mat instanceof THREE.MeshStandardMaterial) {
+          mat.side = THREE.DoubleSide;
+          mat.depthWrite = true;
+          mat.depthTest = true;
+        }
+      };
+
+      // Fix all existing materials on the mesh
+      if (Array.isArray(child.material)) {
+        child.material = child.material.map((m) => {
+          const clonedMat = m.clone();
+          fixMaterial(clonedMat);
+          return clonedMat;
+        });
+      } else {
+        child.material = child.material.clone();
+        fixMaterial(child.material);
+      }
+
       // Find the most specific override: meshName match first, then global fallback
       const override = byMeshName.get(child.name) ?? globalOverride;
       if (!override) return;
 
-      // Clone material to avoid mutating the cached original
+      // Apply material overrides on the already-cloned material
       if (child.material instanceof THREE.MeshStandardMaterial) {
-        child.material = child.material.clone();
         if (override.color) child.material.color.set(override.color);
         if (override.metalness !== undefined) child.material.metalness = override.metalness;
         if (override.roughness !== undefined) child.material.roughness = override.roughness;
@@ -318,6 +340,8 @@ function GLBModelFromUrl({
           child.material.opacity = override.opacity;
           child.material.transparent = override.opacity < 1;
         }
+        if (override.emissive) child.material.emissive.set(override.emissive);
+        if (override.emissiveIntensity !== undefined) child.material.emissiveIntensity = override.emissiveIntensity;
       }
     });
 

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Search, ChevronDown, ChevronRight, Trash2, Settings, Plus, LogOut, Mic, MicOff } from "lucide-react";
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { TrashSection } from "@/components/dashboard/trash-section";
+import { ConfirmDialog, AlertDialog } from "@/components/ui/confirm-dialog";
 import type { Tables } from "@/types/database";
 
 type Project = Tables<"projects">;
@@ -48,6 +49,8 @@ export default function DashboardPage() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, pages: 0 });
   const [isListening, setIsListening] = useState(false);
+  const [speechAlert, setSpeechAlert] = useState(false);
+  const [trashConfirm, setTrashConfirm] = useState<{ id: string } | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export default function DashboardPage() {
   const toggleVoice = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser.");
+      setSpeechAlert(true);
       return;
     }
 
@@ -196,9 +199,15 @@ export default function DashboardPage() {
     setCreating(false);
   }
 
-  async function deleteProject(id: string, e: React.MouseEvent) {
+  function deleteProject(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm("Move this project to trash?")) return;
+    setTrashConfirm({ id });
+  }
+
+  async function confirmDeleteProject() {
+    if (!trashConfirm) return;
+    const { id } = trashConfirm;
+    setTrashConfirm(null);
     await fetch(`/api/projects/${id}`, { method: "DELETE" });
     setProjects((prev) => prev.filter((p) => p.id !== id));
     setPagination((prev) => ({ ...prev, total: prev.total - 1 }));
@@ -889,6 +898,23 @@ export default function DashboardPage() {
         onNameChange={(newName) => setUserName(newName)}
         onAvatarChange={(newUrl) => setAvatarUrl(newUrl)}
         onAccountDeleted={() => router.replace("/sign-in")}
+      />
+
+      {/* Custom dialogs (replacing native confirm/alert) */}
+      <ConfirmDialog
+        open={trashConfirm !== null}
+        title="Move to Trash"
+        message="Move this project to trash? You can restore it within 30 days."
+        confirmLabel="Move to Trash"
+        variant="danger"
+        onConfirm={confirmDeleteProject}
+        onCancel={() => setTrashConfirm(null)}
+      />
+      <AlertDialog
+        open={speechAlert}
+        title="Not Supported"
+        message="Speech recognition is not supported in this browser."
+        onClose={() => setSpeechAlert(false)}
       />
     </div>
   );

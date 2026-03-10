@@ -45,8 +45,8 @@ export async function POST(request: Request) {
             .update({
               plan: tier,
               generation_limit: planConfig.generationLimit,
-              generation_count: 0,
-              generation_reset_at: now,
+              generations_used: 0,
+              billing_cycle_start: now,
             } as Record<string, unknown>)
             .eq("id", userId);
         }
@@ -70,8 +70,8 @@ export async function POST(request: Request) {
             .update({
               plan: tier,
               generation_limit: planConfig.generationLimit,
-              generation_count: 0,
-              generation_reset_at: now,
+              generations_used: 0,
+              billing_cycle_start: now,
             } as Record<string, unknown>)
             .eq("id", userId);
         }
