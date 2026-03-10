@@ -19,31 +19,41 @@ export async function enrichPrompt(userPrompt: string): Promise<string> {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 200,
-      system: `You are a 3D model prompt engineer. Given a short description, expand it into a detailed prompt optimized for AI 3D model generation (Meshy/Tripo3D).
+      max_tokens: 300,
+      system: `You are a 3D model prompt engineer. Given a short description, expand it into a detailed prompt optimized for AI 3D model generation.
 
 Rules:
 - Output ONLY the enhanced prompt, no explanation
-- Keep it under 150 words
-- Add specific structural details (geometry, proportions, materials)
-- Include keywords that produce watertight meshes: "solid", "thick", "closed surface"
-- Describe the object from a 3D perspective, not 2D
+- STRICT LIMIT: Keep it under 80 words and under 500 characters total
+- Add key structural details (geometry, proportions, materials)
+- Include mesh quality keywords: "solid", "closed surface", "clean topology"
 - Include material hints: "wooden", "metallic", "plastic", "fabric"
-- Add quality keywords: "detailed", "high resolution", "clean topology"
-- For organic shapes: add "smooth surface", "connected geometry", "solid form"
-- For hard surfaces: add "sharp edges", "precise geometry", "mechanical detail"
-- Never include instructions like "create" or "generate" — just describe the object`,
+- For organic shapes: "smooth surface", "solid form"
+- For hard surfaces: "sharp edges", "precise geometry"
+- Never include instructions like "create" or "generate" — just describe the object
+- Be concise — quality over quantity`,
       messages: [
         { role: "user", content: userPrompt },
       ],
     });
 
-    const text = response.content
+    let text = response.content
       .filter((b) => b.type === "text")
       .map((b) => (b as { type: "text"; text: string }).text)
-      .join("");
+      .join("")
+      .trim();
 
-    return text.trim() || userPrompt;
+    if (!text) return userPrompt;
+
+    // Enforce hard limit for provider APIs (Meshy max 800 chars)
+    if (text.length > 750) {
+      // Trim to last complete sentence within limit
+      const trimmed = text.slice(0, 750);
+      const lastPeriod = trimmed.lastIndexOf(".");
+      text = lastPeriod > 200 ? trimmed.slice(0, lastPeriod + 1) : trimmed;
+    }
+
+    return text;
   } catch (err) {
     console.warn("[enrichPrompt] Failed, using original:", err);
     return userPrompt;

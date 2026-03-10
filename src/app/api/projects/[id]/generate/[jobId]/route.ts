@@ -81,7 +81,7 @@ export async function GET(
   if (status.status === "complete" && status.modelUrl) {
     // If this is a preview completing (not a refine), start a refine task
     // Only Meshy supports the two-step preview+refine pipeline
-    const supportsRefine = !providerName || providerName === "meshy";
+    const supportsRefine = providerName === "meshy";
     if (!isRefine && supportsRefine) {
       try {
         const refineResult = await refineModel(jobId, providerName);
